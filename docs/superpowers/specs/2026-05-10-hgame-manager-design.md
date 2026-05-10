@@ -29,6 +29,8 @@ Version 1 focuses on:
 - Downloading existing `.zip` and `.rar` files to a local machine.
 - Importing new files into staging through browser upload or a watch folder.
 - Producing dry-run organization plans for future NAS cleanup.
+- Using one primary category for stable NAS paths while allowing multiple genre
+  facets for mixed games.
 - Configuring storage, metadata, and database sources through adapters.
 - Exporting metadata to a portable JSON snapshot for backup or migration.
 
@@ -116,6 +118,8 @@ Key fields:
 - Description.
 - Release date.
 - Source category and tags from DLsite.
+- Primary category.
+- Genre facets.
 - Cover asset id.
 - Preview image asset ids.
 - Lightweight series or grouping text.
@@ -134,7 +138,8 @@ Key fields:
 - Modified time.
 - Optional content hash.
 - Legacy top-level folder, such as `ADV` or old `SIM+SLG`.
-- Canonical category suggestion or confirmed category.
+- Primary category suggestion or confirmed primary category.
+- Genre facets, multi-select, such as `Simulation` plus `Strategy`.
 - Linked `GameWork` id, nullable.
 - Version.
 - Language.
@@ -192,7 +197,8 @@ Key fields:
 - File size.
 - Modified time.
 - Optional hash.
-- Suggested canonical category.
+- Suggested primary category.
+- Suggested genre facets.
 - Suggested filename.
 - Suggested target path.
 - Linked candidate or work id.
@@ -233,12 +239,28 @@ The scanner uses a mixed identity strategy:
 This avoids full reads of large zip/rar files on every scan while preserving a
 path to better deduplication and move detection.
 
-## Canonical Categories
+## Categories and Genre Facets
 
 Legacy NAS folders are preserved as source-location metadata only. They are not
 the final taxonomy.
 
-The first taxonomy is configurable and starts with:
+The classification model has two layers:
+
+- Primary category: one required category after confirmation. This is the main
+  shelf and is used for stable NAS organization paths.
+- Genre facets: zero or more secondary classifications used for browsing,
+  filtering, search, and mixed-genre games.
+
+This keeps physical organization predictable while still representing games that
+mix genres. For example, an item can have primary category `Simulation` and
+genre facets `Simulation` and `Strategy`, or primary category `RPG` and facets
+`RPG` and `Action`.
+
+Primary category and genre facets are user-controlled fields. DLsite categories
+and tags are stored as source metadata and may be used as suggestions, but they
+do not become confirmed classifications until the user accepts or edits them.
+
+The first primary-category taxonomy is configurable and starts with:
 
 - `Visual Novel`
 - `Action`
@@ -250,9 +272,9 @@ The first taxonomy is configurable and starts with:
 - `Unsorted`
 
 The scanner may use legacy folders as weak hints, but a legacy folder does not
-automatically confirm a canonical category. For example, old `SIM+SLG` remains a
-legacy location and can be split into `Simulation`, `Strategy`, `3D`, or other
-custom categories.
+automatically confirm a primary category. For example, old `SIM+SLG` remains a
+legacy location and can suggest multiple facets such as `Simulation` and
+`Strategy`; the user still chooses one primary category for the final NAS path.
 
 ## User Interface
 
@@ -279,7 +301,8 @@ Library center pane modes:
 
 Left sidebar filters:
 
-- Canonical category.
+- Primary category.
+- Genre facets.
 - Personal tags.
 - Quick filters, such as needs review, has DLsite, missing cover, downloaded,
   extracted, and favorites.
@@ -314,7 +337,7 @@ Scanning `/mnt/games`:
 - Marks missing files as absent instead of deleting their metadata immediately.
 - Detects suspected duplicates or moved files.
 - Preserves legacy path information.
-- Suggests, but does not confirm, canonical categories.
+- Suggests, but does not confirm, primary categories or genre facets.
 - Records per-item warnings without failing the entire scan.
 
 ### DLsite Match
@@ -364,7 +387,8 @@ New games enter staging through:
 - Server-side watch folder.
 
 Each staged file receives a staging item. The user can search metadata sources,
-assign canonical category, edit personal fields, and preview the final filename.
+assign primary category and genre facets, edit personal fields, and preview the
+final filename.
 
 The system generates suggested names and target paths but requires manual
 confirmation before any formal commit.
@@ -377,7 +401,8 @@ archive.
 The system still prepares for future controlled organization:
 
 - Generate target path suggestions.
-- Show source path, target path, category, filename, and file size.
+- Show source path, target path, primary category, genre facets, filename, and
+  file size.
 - Detect target conflicts.
 - Refuse overwrites by default.
 - Keep staging originals until commit succeeds.
@@ -389,7 +414,7 @@ Future writable NAS support must use an explicit `LibraryWriter` or
 Example future path shape:
 
 ```text
-<canonical-category>/<circle-or-developer>/<title>/<title> <version>.<ext>
+<primary-category>/<circle-or-developer>/<title>/<title> <version>.<ext>
 ```
 
 ### Metadata Export and Import
@@ -402,6 +427,7 @@ Export includes:
 - Inventory metadata and source ids.
 - Metadata source provenance.
 - Personal ratings, tags, statuses, and notes.
+- Primary categories and genre facets.
 - Asset source URLs and cache metadata.
 - Category definitions.
 - Organization plans and staging metadata when requested.
@@ -495,7 +521,7 @@ Cover:
 
 - Filename cleanup and search-query generation.
 - Version, language, bracket, RJ id, and extension parsing.
-- Canonical category suggestion from weak hints.
+- Primary category and genre facet suggestions from weak hints.
 - Inventory identity and changed-file detection.
 - Suspected move, duplicate, and hash fallback logic.
 - Organization plan generation.
@@ -555,7 +581,7 @@ Before considering version 1 usable:
 
 ## Open Decisions Deferred
 
-- Exact canonical taxonomy names after real-world cleanup starts.
+- Exact primary category and genre facet names after real-world cleanup starts.
 - Whether SQLite ships in version 1 or remains a later adapter.
 - Whether HTTP range requests are included in version 1 downloads.
 - Whether `.7z` is enabled by default.
