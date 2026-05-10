@@ -12,7 +12,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env();
-    let state = state::AppState::connect(&config.database_url).await?;
+    let state = state::AppState::connect(
+        &config.database_url,
+        hgame_app::storage::StorageRoot::new(config.library_root.clone()),
+    )
+    .await?;
     let app = routes::router(state).layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind(&config.bind_addr).await?;
