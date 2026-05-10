@@ -1,6 +1,9 @@
+mod routes;
 mod state;
 
 use hgame_app::config::AppConfig;
+use tokio::net::TcpListener;
+use tower_http::trace::TraceLayer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -9,7 +12,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = AppConfig::from_env();
-    let _state = state::AppState::connect(&config.database_url).await?;
-    tracing::info!("hgame-server initialized");
+    let state = state::AppState::connect(&config.database_url).await?;
+    let app = routes::router(state).layer(TraceLayer::new_for_http());
+
+    let listener = TcpListener::bind(&config.bind_addr).await?;
+    tracing::info!("listening on {}", config.bind_addr);
+    axum::serve(listener, app).await?;
     Ok(())
 }
