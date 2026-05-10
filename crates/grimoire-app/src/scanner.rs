@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use hgame_domain::inventory::{
+use grimoire_domain::inventory::{
     InventoryItem, InventoryKind, OrganizationStatus, PlayStatus,
 };
 use std::path::{Path, PathBuf};

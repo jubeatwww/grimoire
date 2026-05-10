@@ -1,4 +1,4 @@
-use hgame_app::storage::StorageRoot;
+use grimoire_app::storage::StorageRoot;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 

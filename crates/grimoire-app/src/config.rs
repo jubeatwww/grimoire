@@ -13,17 +13,17 @@ impl AppConfig {
     pub fn from_env() -> Self {
         Self {
             database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/hgame_manager".to_string()),
-            library_root: std::env::var("HGAME_LIBRARY_ROOT")
+                .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/grimoire".to_string()),
+            library_root: std::env::var("GRIMOIRE_LIBRARY_ROOT")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from("/mnt/games")),
-            staging_root: std::env::var("HGAME_STAGING_ROOT")
+            staging_root: std::env::var("GRIMOIRE_STAGING_ROOT")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from("./var/staging")),
-            asset_cache_root: std::env::var("HGAME_ASSET_CACHE_ROOT")
+            asset_cache_root: std::env::var("GRIMOIRE_ASSET_CACHE_ROOT")
                 .map(PathBuf::from)
                 .unwrap_or_else(|_| PathBuf::from("./var/assets")),
-            bind_addr: std::env::var("HGAME_BIND_ADDR")
+            bind_addr: std::env::var("GRIMOIRE_BIND_ADDR")
                 .unwrap_or_else(|_| "127.0.0.1:3000".to_string()),
         }
     }

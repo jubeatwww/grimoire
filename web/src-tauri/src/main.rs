@@ -1,5 +1,5 @@
 fn main() {
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("failed to run HGame Manager desktop app");
+        .expect("failed to run Grimoire desktop app");
 }

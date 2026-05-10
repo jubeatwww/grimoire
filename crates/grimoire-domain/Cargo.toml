@@ -1,5 +1,5 @@
 [package]
-name = "hgame-domain"
+name = "grimoire-domain"
 edition.workspace = true
 license.workspace = true
 version.workspace = true

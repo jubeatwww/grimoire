@@ -1,5 +1,5 @@
 [package]
-name = "hgame-app"
+name = "grimoire-app"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
@@ -8,7 +8,7 @@ version.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
-hgame-domain = { path = "../hgame-domain" }
+grimoire-domain = { path = "../grimoire-domain" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

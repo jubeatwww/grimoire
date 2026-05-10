@@ -1,4 +1,4 @@
-use hgame_domain::metadata::MetadataCandidate;
+use grimoire_domain::metadata::MetadataCandidate;
 use uuid::Uuid;
 
 #[async_trait::async_trait]

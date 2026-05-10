@@ -1,7 +1,7 @@
 mod routes;
 mod state;
 
-use hgame_app::config::AppConfig;
+use grimoire_app::config::AppConfig;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::from_env();
     let state = state::AppState::connect(
         &config.database_url,
-        hgame_app::storage::StorageRoot::new(config.library_root.clone()),
+        grimoire_app::storage::StorageRoot::new(config.library_root.clone()),
     )
     .await?;
     let app = routes::router(state).layer(TraceLayer::new_for_http());

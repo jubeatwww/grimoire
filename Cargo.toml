@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-  "crates/hgame-domain",
-  "crates/hgame-app",
-  "crates/hgame-server"
+  "crates/grimoire-domain",
+  "crates/grimoire-app",
+  "crates/grimoire-server"
 ]
 
 [workspace.package]

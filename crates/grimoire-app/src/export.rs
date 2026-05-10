@@ -1,4 +1,4 @@
-use hgame_domain::{
+use grimoire_domain::{
     asset::Asset, inventory::InventoryItem, metadata::MetadataCandidate,
     staging::StagingItem, work::GameWork,
 };

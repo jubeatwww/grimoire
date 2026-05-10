@@ -1,4 +1,4 @@
-use hgame_app::scanner::{scan_library, ScanOptions};
+use grimoire_app::scanner::{scan_library, ScanOptions};
 use std::path::PathBuf;
 
 #[tokio::test]
