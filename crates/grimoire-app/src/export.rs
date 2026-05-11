@@ -1,6 +1,6 @@
 use grimoire_domain::{
-    asset::Asset, inventory::InventoryItem, metadata::MetadataCandidate,
-    staging::StagingItem, work::GameWork,
+    asset::Asset, inventory::InventoryItem, metadata::MetadataCandidate, staging::StagingItem,
+    work::GameWork,
 };
 use serde::{Deserialize, Serialize};
 

@@ -41,7 +41,9 @@ async fn download_item(
         .resolve_relative(relative)
         .map_err(|_| StatusCode::FORBIDDEN)?;
 
-    let file = File::open(resolved).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let file = File::open(resolved)
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
     let stream = ReaderStream::new(file);
     let body = Body::from_stream(stream);
 

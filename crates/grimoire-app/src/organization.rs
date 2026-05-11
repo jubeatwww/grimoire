@@ -14,7 +14,12 @@ pub fn build_target_path(
 
     let filename = match version {
         Some(version) if !version.trim().is_empty() => {
-            format!("{} {}.{}", safe_title, sanitize_segment(version), safe_extension)
+            format!(
+                "{} {}.{}",
+                safe_title,
+                sanitize_segment(version),
+                safe_extension
+            )
         }
         _ => format!("{}.{}", safe_title, safe_extension),
     };
@@ -57,6 +62,9 @@ mod tests {
     #[test]
     fn sanitizes_path_separators() {
         let plan = build_target_path("RPG", "Circle/Name", "Game:Name", None, "rar");
-        assert_eq!(plan, PathBuf::from("RPG/Circle_Name/Game_Name/Game_Name.rar"));
+        assert_eq!(
+            plan,
+            PathBuf::from("RPG/Circle_Name/Game_Name/Game_Name.rar")
+        );
     }
 }

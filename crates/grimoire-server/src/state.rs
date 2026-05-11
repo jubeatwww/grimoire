@@ -1,3 +1,4 @@
+use anyhow::Context;
 use grimoire_app::storage::StorageRoot;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
@@ -14,9 +15,15 @@ impl AppState {
             .max_connections(5)
             .acquire_timeout(Duration::from_secs(5))
             .connect(database_url)
-            .await?;
+            .await
+            .context(
+                "failed to connect to PostgreSQL; check DATABASE_URL or GRIMOIRE_DATABASE_*",
+            )?;
 
-        sqlx::migrate!("./migrations").run(&db).await?;
+        sqlx::migrate!("./migrations")
+            .run(&db)
+            .await
+            .context("failed to run database migrations")?;
 
         Ok(Self { db, library_root })
     }

@@ -1,5 +1,8 @@
 use crate::state::AppState;
-use axum::{routing::get, Json, Router};
+use axum::{
+    routing::{get, MethodRouter},
+    Json,
+};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -7,8 +10,8 @@ struct EmptyList<T> {
     items: Vec<T>,
 }
 
-pub fn router() -> Router<AppState> {
-    Router::new().route("/", get(list))
+pub(crate) fn list_route() -> MethodRouter<AppState> {
+    get(list)
 }
 
 async fn list() -> Json<EmptyList<serde_json::Value>> {

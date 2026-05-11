@@ -3,8 +3,7 @@ use std::path::PathBuf;
 
 #[tokio::test]
 async fn scans_zip_and_rar_files_with_legacy_location() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/library");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/library");
 
     let result = scan_library(ScanOptions {
         source_id: "fixture".to_string(),

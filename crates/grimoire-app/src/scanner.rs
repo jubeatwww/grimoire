@@ -1,7 +1,5 @@
 use chrono::{DateTime, Utc};
-use grimoire_domain::inventory::{
-    InventoryItem, InventoryKind, OrganizationStatus, PlayStatus,
-};
+use grimoire_domain::inventory::{InventoryItem, InventoryKind, OrganizationStatus, PlayStatus};
 use std::path::{Path, PathBuf};
 use tokio::task;
 use uuid::Uuid;
