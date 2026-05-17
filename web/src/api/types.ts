@@ -19,3 +19,22 @@ export interface InventoryItem {
 export interface LibraryResponse {
   items: InventoryItem[];
 }
+
+export interface MetadataCandidate {
+  id: string;
+  sourceName: string;
+  sourceWorkId: string;
+  sourceUrl: string;
+  rank: number;
+  title: string;
+  circle: string | null;
+  coverUrl: string | null;
+}
+
+export interface SearchResponse {
+  candidates: MetadataCandidate[];
+}
+
+export interface ConfirmResponse {
+  gameWorkId: string;
+}

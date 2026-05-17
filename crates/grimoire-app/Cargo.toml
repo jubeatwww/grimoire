@@ -9,7 +9,10 @@ anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 grimoire-domain = { path = "../grimoire-domain" }
+regex.workspace = true
+reqwest.workspace = true
 serde.workspace = true
+urlencoding.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchLibrary } from "./api/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchLibrary, triggerScan } from "./api/client";
 import type { InventoryItem } from "./api/types";
 import { AppShell } from "./components/AppShell";
 import { DetailPanel } from "./components/DetailPanel";
@@ -13,15 +13,31 @@ type ViewMode = "cover" | "table" | "review";
 export function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("cover");
   const [selected, setSelected] = useState<InventoryItem | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["library"], queryFn: fetchLibrary, retry: false });
   const items = query.data?.items ?? [];
   const selectedItem = useMemo(() => selected ?? items[0] ?? null, [items, selected]);
 
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      await triggerScan();
+      await queryClient.invalidateQueries({ queryKey: ["library"] });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleMetadataConfirmed = () => {
+    queryClient.invalidateQueries({ queryKey: ["library"] });
+  };
+
   return (
-    <AppShell detail={<DetailPanel item={selectedItem} />}>
+    <AppShell detail={<DetailPanel item={selectedItem} onMetadataConfirmed={handleMetadataConfirmed} />}>
       <header className="topbar">
         <input aria-label="Search title, filename, circle, tag, DLsite id" />
-        <button>Scan</button>
+        <button onClick={handleScan} disabled={scanning}>{scanning ? "Scanning..." : "Scan"}</button>
         <button className="primary">Import</button>
       </header>
       <div className="view-switch">

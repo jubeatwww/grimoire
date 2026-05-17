@@ -1,4 +1,5 @@
 pub mod config;
+pub mod dlsite;
 pub mod export;
 pub mod metadata_source;
 pub mod organization;
