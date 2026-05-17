@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { confirmCandidate, downloadUrl, searchMetadata } from "../api/client";
 import type { InventoryItem, MetadataCandidate } from "../api/types";
 
@@ -7,22 +7,43 @@ interface DetailPanelProps {
   onMetadataConfirmed?: () => void;
 }
 
+function cleanQuery(filename: string): string {
+  return filename
+    .replace(/\.(zip|rar|7z|exe|iso)$/i, "")
+    .replace(/[vV]?\d+\.\d+[\d.]*/g, "")
+    .replace(/\+\d+/g, "")
+    .replace(/\[.*?\]/g, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
   const [candidates, setCandidates] = useState<MetadataCandidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (item) {
+      setQuery(cleanQuery(item.fileName));
+      setCandidates([]);
+      setError(null);
+    }
+  }, [item?.id]);
 
   if (!item) {
     return <div className="empty-detail">Select a game</div>;
   }
 
   const handleSearch = async () => {
+    if (!query.trim()) return;
     setSearching(true);
     setError(null);
     setCandidates([]);
     try {
-      const result = await searchMetadata(item.fileName);
+      const result = await searchMetadata(query.trim());
       setCandidates(result.candidates);
       if (result.candidates.length === 0) {
         setError("No results found");
@@ -61,10 +82,19 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
         <dt>Language</dt>
         <dd>{item.language ?? "unknown"}</dd>
       </dl>
-      <div className="detail-actions">
-        <button onClick={handleSearch} disabled={searching}>
-          {searching ? "Searching..." : "Search DLsite"}
+      <div className="detail-search">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          placeholder="Search DLsite..."
+        />
+        <button onClick={handleSearch} disabled={searching || !query.trim()}>
+          {searching ? "..." : "Search"}
         </button>
+      </div>
+      <div className="detail-actions">
         <a className="button" href={downloadUrl(item.id)}>Download</a>
       </div>
       {error && <p className="error-message">{error}</p>}

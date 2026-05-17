@@ -15,10 +15,9 @@ pub(crate) async fn scan(State(state): State<AppState>) -> Result<Json<ScanRespo
         root: state.library_root.root().to_path_buf(),
     };
 
-    let ScanResult { items, warnings } =
-        grimoire_app::scanner::scan_library(options)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let ScanResult { items, warnings } = grimoire_app::scanner::scan_library(options)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     for item in &items {
         let path_str = item.path.to_string_lossy();

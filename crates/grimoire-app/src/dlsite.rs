@@ -10,6 +10,15 @@ use uuid::Uuid;
 static RJ_CODE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(RJ|VJ|BJ)\d{6,8}").unwrap());
 
+pub fn clean_query(filename: &str) -> String {
+    let s = Regex::new(r"(?i)\.(zip|rar|7z|exe|iso)$").unwrap().replace(filename, "");
+    let s = Regex::new(r"\[.*?\]").unwrap().replace_all(&s, " ");
+    let s = Regex::new(r"\(.*?\)").unwrap().replace_all(&s, " ");
+    let s = Regex::new(r"(?i)[vV]?\d+\.\d+[\d.]*").unwrap().replace_all(&s, " ");
+    let s = Regex::new(r"\+\d+").unwrap().replace_all(&s, " ");
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub struct DlsiteSource {
     client: Client,
 }
@@ -25,171 +34,151 @@ impl DlsiteSource {
     }
 
     pub fn extract_work_id(filename: &str) -> Option<String> {
-        RJ_CODE_RE
-            .find(filename)
-            .map(|m| m.as_str().to_uppercase())
+        RJ_CODE_RE.find(filename).map(|m| m.as_str().to_uppercase())
     }
 
-    async fn fetch_product_info(
-        &self,
-        work_id: &str,
-    ) -> anyhow::Result<Option<DlsiteProductInfo>> {
-        let url = format!(
+    async fn fetch_by_work_id(&self, work_id: &str) -> anyhow::Result<Option<MetadataCandidate>> {
+        let ajax_url = format!(
             "https://www.dlsite.com/maniax/product/info/ajax?product_id={}",
             work_id
         );
-
-        let resp = self.client.get(&url).send().await?;
-
+        let resp = self.client.get(&ajax_url).send().await?;
         if !resp.status().is_success() {
             return Ok(None);
         }
+        let ajax_map: HashMap<String, ProductAjax> = resp.json().await?;
+        let Some(ajax) = ajax_map.into_values().next() else {
+            return Ok(None);
+        };
 
-        let body: HashMap<String, DlsiteProductInfo> = resp.json().await?;
-        Ok(body.into_values().next())
-    }
-
-    async fn search_by_keyword(&self, query: &str) -> anyhow::Result<Vec<DlsiteSearchItem>> {
-        let url = format!(
-            "https://www.dlsite.com/maniax/fsr/=/language/jp/keyword/{}/per_page/10/page/1/order/trend/options_and_or/and/.js",
-            urlencoding::encode(query)
+        let title = ajax.work_name.unwrap_or_default();
+        let cover_url = ajax.work_image.map(|img| normalize_url(&img));
+        let source_url = format!(
+            "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
+            work_id
         );
 
-        let resp = self.client.get(&url).send().await?;
+        // Use suggest API to get maker_name (product info ajax doesn't include it)
+        let circle = self.suggest_maker(work_id).await.ok().flatten();
 
-        if !resp.status().is_success() {
-            return Ok(Vec::new());
-        }
-
-        let body: DlsiteSearchResponse = resp.json().await?;
-        Ok(body.work)
+        Ok(Some(MetadataCandidate {
+            id: Uuid::new_v4(),
+            source_name: "dlsite".to_string(),
+            source_work_id: work_id.to_string(),
+            source_url,
+            query_used: work_id.to_string(),
+            rank: 1,
+            title: title.clone(),
+            circle: circle.clone(),
+            cover_url,
+            normalized_payload: serde_json::json!({
+                "title": title,
+                "circle": circle,
+                "release_date": ajax.regist_date,
+            }),
+        }))
     }
-}
 
-#[async_trait::async_trait]
-impl MetadataSource for DlsiteSource {
-    async fn search(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
-        // First try to extract RJ code from query and fetch directly
-        if let Some(work_id) = Self::extract_work_id(query) {
-            if let Some(info) = self.fetch_product_info(&work_id).await? {
-                return Ok(vec![info.into_candidate(&work_id, query, 1)]);
-            }
+    async fn suggest_maker(&self, work_id: &str) -> anyhow::Result<Option<String>> {
+        let suggest = self.suggest(work_id).await?;
+        Ok(suggest.work.into_iter().next().and_then(|w| w.maker_name))
+    }
+
+    async fn suggest(&self, term: &str) -> anyhow::Result<SuggestResponse> {
+        let url = format!(
+            "https://www.dlsite.com/suggest/?term={}&site=adult-jp&time=1&touch=0&_=1",
+            urlencoding::encode(term)
+        );
+        let resp = self.client.get(&url).send().await?;
+        if !resp.status().is_success() {
+            return Ok(SuggestResponse::default());
         }
+        let body = resp.text().await?;
+        // Response may be JSONP (with callback wrapper) or plain JSON
+        let json_str = if let Some(start) = body.find('(') {
+            &body[start + 1..body.len().saturating_sub(1)]
+        } else {
+            &body
+        };
+        Ok(serde_json::from_str(json_str).unwrap_or_default())
+    }
 
-        // Fallback to keyword search
-        let items = self.search_by_keyword(query).await?;
-        let candidates = items
+    async fn search_by_keyword(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
+        let suggest = self.suggest(query).await?;
+
+        let candidates = suggest
+            .work
             .into_iter()
             .enumerate()
-            .map(|(i, item)| item.into_candidate(query, (i + 1) as i32))
+            .map(|(i, item)| {
+                let work_id = item.workno.unwrap_or_default();
+                let source_url = format!(
+                    "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
+                    work_id
+                );
+
+                MetadataCandidate {
+                    id: Uuid::new_v4(),
+                    source_name: "dlsite".to_string(),
+                    source_work_id: work_id,
+                    source_url,
+                    query_used: query.to_string(),
+                    rank: (i + 1) as i32,
+                    title: item.work_name.clone().unwrap_or_default(),
+                    circle: item.maker_name.clone(),
+                    cover_url: None,
+                    normalized_payload: serde_json::json!({
+                        "title": item.work_name,
+                        "circle": item.maker_name,
+                        "work_type": item.work_type,
+                    }),
+                }
+            })
             .collect();
 
         Ok(candidates)
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct DlsiteProductInfo {
-    work_name: Option<String>,
-    maker_name: Option<String>,
-    work_image: Option<String>,
-    #[serde(default)]
-    genre: Vec<DlsiteGenre>,
-    regist_date: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DlsiteGenre {
-    name: Option<String>,
-}
-
-impl DlsiteProductInfo {
-    fn into_candidate(self, work_id: &str, query: &str, rank: i32) -> MetadataCandidate {
-        let title = self.work_name.unwrap_or_default();
-        let circle = self.maker_name.clone();
-        let cover_url = self.work_image.map(|img| {
-            if img.starts_with("//") {
-                format!("https:{img}")
-            } else {
-                img
+#[async_trait::async_trait]
+impl MetadataSource for DlsiteSource {
+    async fn search(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
+        if let Some(work_id) = Self::extract_work_id(query) {
+            if let Some(candidate) = self.fetch_by_work_id(&work_id).await? {
+                return Ok(vec![candidate]);
             }
-        });
-        let source_url = format!(
-            "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
-            work_id
-        );
-        let genres: Vec<String> = self
-            .genre
-            .into_iter()
-            .filter_map(|g| g.name)
-            .collect();
-
-        MetadataCandidate {
-            id: Uuid::new_v4(),
-            source_name: "dlsite".to_string(),
-            source_work_id: work_id.to_string(),
-            source_url,
-            query_used: query.to_string(),
-            rank,
-            title: title.clone(),
-            circle: circle.clone(),
-            cover_url,
-            normalized_payload: serde_json::json!({
-                "title": title,
-                "circle": circle,
-                "genres": genres,
-                "release_date": self.regist_date,
-            }),
         }
+
+        self.search_by_keyword(query).await
     }
 }
 
 #[derive(Debug, Deserialize)]
-struct DlsiteSearchResponse {
+struct ProductAjax {
+    work_name: Option<String>,
+    work_image: Option<String>,
+    regist_date: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SuggestResponse {
     #[serde(default)]
-    work: Vec<DlsiteSearchItem>,
+    work: Vec<SuggestWork>,
 }
 
 #[derive(Debug, Deserialize)]
-struct DlsiteSearchItem {
-    workno: Option<String>,
+struct SuggestWork {
     work_name: Option<String>,
+    workno: Option<String>,
     maker_name: Option<String>,
-    work_image: Option<String>,
+    work_type: Option<String>,
 }
 
-impl DlsiteSearchItem {
-    fn into_candidate(self, query: &str, rank: i32) -> MetadataCandidate {
-        let work_id = self.workno.unwrap_or_default();
-        let title = self.work_name.unwrap_or_default();
-        let circle = self.maker_name;
-        let cover_url = self.work_image.map(|img| {
-            if img.starts_with("//") {
-                format!("https:{img}")
-            } else {
-                img
-            }
-        });
-        let source_url = format!(
-            "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
-            work_id
-        );
-
-        MetadataCandidate {
-            id: Uuid::new_v4(),
-            source_name: "dlsite".to_string(),
-            source_work_id: work_id,
-            source_url,
-            query_used: query.to_string(),
-            rank,
-            title: title.clone(),
-            circle: circle.clone(),
-            cover_url,
-            normalized_payload: serde_json::json!({
-                "title": title,
-                "circle": circle,
-            }),
-        }
+fn normalize_url(url: &str) -> String {
+    if url.starts_with("//") {
+        format!("https:{url}")
+    } else {
+        url.to_string()
     }
 }
 
@@ -212,5 +201,21 @@ mod tests {
             Some("VJ012345".to_string())
         );
         assert_eq!(DlsiteSource::extract_work_id("no_code_here.zip"), None);
+    }
+
+    #[test]
+    fn cleans_filename_for_search() {
+        assert_eq!(clean_query("RoomGirl V2.0.1+200.rar"), "RoomGirl");
+        assert_eq!(clean_query("[SomeCircle] My Game (v1.02).zip"), "My Game");
+        assert_eq!(clean_query("魔法少女RPG.zip"), "魔法少女RPG");
+    }
+
+    #[test]
+    fn parses_suggest_json() {
+        let json = r#"{"work":[{"work_name":"Test","workno":"RJ123456","maker_name":"Circle","work_type":"RPG"}],"maker":[],"reqtime":1}"#;
+        let resp: SuggestResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.work.len(), 1);
+        assert_eq!(resp.work[0].workno.as_deref(), Some("RJ123456"));
+        assert_eq!(resp.work[0].maker_name.as_deref(), Some("Circle"));
     }
 }

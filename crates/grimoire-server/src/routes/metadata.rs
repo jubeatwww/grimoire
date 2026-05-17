@@ -1,10 +1,5 @@
 use crate::state::AppState;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    routing::post,
-    Json, Router,
-};
+use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use grimoire_app::dlsite::DlsiteSource;
 use grimoire_app::metadata_source::MetadataSource;
 use serde::{Deserialize, Serialize};
