@@ -20,6 +20,7 @@ async fn main() -> anyhow::Result<()> {
     let config = AppConfig::from_env();
     let state = state::AppState::connect(
         &config.database_url,
+        &config.database_schema,
         grimoire_app::storage::StorageRoot::new(config.library_root.clone()),
     )
     .await?;

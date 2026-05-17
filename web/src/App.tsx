@@ -10,28 +10,11 @@ import { ReviewQueue } from "./components/ReviewQueue";
 
 type ViewMode = "cover" | "table" | "review";
 
-const fallbackItems: InventoryItem[] = [
-  {
-    id: "demo-roomgirl",
-    sourceId: "demo",
-    fileName: "RoomGirl V2.0.1+200.rar",
-    legacyLocation: "舊 SIM+SLG",
-    primaryCategory: "3D",
-    genreFacets: ["Simulation", "3D"],
-    organizationStatus: "pending",
-    playStatus: "not_played",
-    rating: null,
-    version: "2.0.1",
-    language: null,
-    notes: null
-  }
-];
-
 export function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("cover");
   const [selected, setSelected] = useState<InventoryItem | null>(null);
   const query = useQuery({ queryKey: ["library"], queryFn: fetchLibrary, retry: false });
-  const items = query.data?.items.length ? query.data.items : fallbackItems;
+  const items = query.data?.items ?? [];
   const selectedItem = useMemo(() => selected ?? items[0] ?? null, [items, selected]);
 
   return (

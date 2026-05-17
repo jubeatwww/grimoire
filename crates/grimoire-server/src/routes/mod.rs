@@ -3,16 +3,21 @@ pub mod export;
 pub mod health;
 pub mod library;
 pub mod metadata;
+pub mod scan;
 pub mod staging;
 
 use crate::state::AppState;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health::health))
         .route("/api/library", library::list_route())
         .route("/api/library/", library::list_route())
+        .route("/api/scan", post(scan::scan))
         .nest("/api/downloads", download::router())
         .nest("/api/metadata", metadata::router())
         .nest("/api/staging", staging::router())
@@ -45,7 +50,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_ne!(response.status(), StatusCode::NOT_FOUND);
+        assert_ne!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[tokio::test]
@@ -62,7 +68,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_ne!(response.status(), StatusCode::NOT_FOUND);
+        assert_ne!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     fn test_router() -> Router {

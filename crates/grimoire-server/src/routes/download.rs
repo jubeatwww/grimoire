@@ -33,12 +33,9 @@ async fn download_item(
     let item_path: String = row.get("path");
     let file_name: String = row.get("file_name");
 
-    let relative = std::path::Path::new(&item_path)
-        .strip_prefix(state.library_root.root())
-        .map_err(|_| StatusCode::FORBIDDEN)?;
     let resolved = state
         .library_root
-        .resolve_relative(relative)
+        .resolve_relative(&item_path)
         .map_err(|_| StatusCode::FORBIDDEN)?;
 
     let file = File::open(resolved)

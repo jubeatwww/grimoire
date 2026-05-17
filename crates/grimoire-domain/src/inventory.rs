@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OrganizationStatus {
     Pending,
     Matched,
@@ -13,6 +14,7 @@ pub enum OrganizationStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PlayStatus {
     NotPlayed,
     WantToPlay,
@@ -22,6 +24,7 @@ pub enum PlayStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum InventoryKind {
     File,
     Directory,

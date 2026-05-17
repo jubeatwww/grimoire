@@ -56,11 +56,16 @@ fn scan_library_blocking(options: ScanOptions) -> anyhow::Result<ScanResult> {
             .unwrap_or_default()
             .to_string();
         let legacy_location = legacy_location(&options.root, path);
+        let relative_path = path
+            .strip_prefix(&options.root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
 
         items.push(InventoryItem {
             id: Uuid::new_v4(),
             source_id: options.source_id.clone(),
-            path: path.to_path_buf(),
+            path: PathBuf::from(&relative_path),
             file_name,
             extension,
             kind: InventoryKind::File,

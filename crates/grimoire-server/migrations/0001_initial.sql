@@ -1,4 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE SCHEMA IF NOT EXISTS grimoire;
+SET search_path TO grimoire, public;
 
 CREATE TABLE game_works (
     id uuid PRIMARY KEY,

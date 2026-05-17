@@ -3,6 +3,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub database_url: String,
+    pub database_schema: String,
     pub library_root: PathBuf,
     pub staging_root: PathBuf,
     pub asset_cache_root: PathBuf,
@@ -20,6 +21,7 @@ impl AppConfig {
 
         Self {
             database_url,
+            database_schema: lookup_or_default(&mut lookup, "GRIMOIRE_DATABASE_SCHEMA", "grimoire"),
             library_root: lookup_non_empty(&mut lookup, "GRIMOIRE_LIBRARY_ROOT")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from("/mnt/games")),
