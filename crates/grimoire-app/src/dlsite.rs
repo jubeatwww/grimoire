@@ -3,7 +3,6 @@ use grimoire_domain::metadata::MetadataCandidate;
 use regex::Regex;
 use reqwest::Client;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::sync::LazyLock;
 use uuid::Uuid;
 
@@ -37,53 +36,6 @@ impl DlsiteSource {
         RJ_CODE_RE.find(filename).map(|m| m.as_str().to_uppercase())
     }
 
-    async fn fetch_by_work_id(&self, work_id: &str) -> anyhow::Result<Option<MetadataCandidate>> {
-        let ajax_url = format!(
-            "https://www.dlsite.com/maniax/product/info/ajax?product_id={}",
-            work_id
-        );
-        let resp = self.client.get(&ajax_url).send().await?;
-        if !resp.status().is_success() {
-            return Ok(None);
-        }
-        let ajax_map: HashMap<String, ProductAjax> = resp.json().await?;
-        let Some(ajax) = ajax_map.into_values().next() else {
-            return Ok(None);
-        };
-
-        let title = ajax.work_name.unwrap_or_default();
-        let cover_url = ajax.work_image.map(|img| normalize_url(&img));
-        let source_url = format!(
-            "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
-            work_id
-        );
-
-        // Use suggest API to get maker_name (product info ajax doesn't include it)
-        let circle = self.suggest_maker(work_id).await.ok().flatten();
-
-        Ok(Some(MetadataCandidate {
-            id: Uuid::new_v4(),
-            source_name: "dlsite".to_string(),
-            source_work_id: work_id.to_string(),
-            source_url,
-            query_used: work_id.to_string(),
-            rank: 1,
-            title: title.clone(),
-            circle: circle.clone(),
-            cover_url,
-            normalized_payload: serde_json::json!({
-                "title": title,
-                "circle": circle,
-                "release_date": ajax.regist_date,
-            }),
-        }))
-    }
-
-    async fn suggest_maker(&self, work_id: &str) -> anyhow::Result<Option<String>> {
-        let suggest = self.suggest(work_id).await?;
-        Ok(suggest.work.into_iter().next().and_then(|w| w.maker_name))
-    }
-
     async fn suggest(&self, term: &str) -> anyhow::Result<SuggestResponse> {
         let url = format!(
             "https://www.dlsite.com/suggest/?term={}&site=adult-jp&time=1&touch=0&_=1",
@@ -103,8 +55,8 @@ impl DlsiteSource {
         Ok(serde_json::from_str(json_str).unwrap_or_default())
     }
 
-    async fn search_by_keyword(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
-        let suggest = self.suggest(query).await?;
+    async fn search_by_term(&self, term: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
+        let suggest = self.suggest(term).await?;
 
         let candidates = suggest
             .work
@@ -116,17 +68,18 @@ impl DlsiteSource {
                     "https://www.dlsite.com/maniax/work/=/product_id/{}.html",
                     work_id
                 );
+                let cover_url = cover_url_for_workno(&work_id);
 
                 MetadataCandidate {
                     id: Uuid::new_v4(),
                     source_name: "dlsite".to_string(),
                     source_work_id: work_id,
                     source_url,
-                    query_used: query.to_string(),
+                    query_used: term.to_string(),
                     rank: (i + 1) as i32,
                     title: item.work_name.clone().unwrap_or_default(),
                     circle: item.maker_name.clone(),
-                    cover_url: None,
+                    cover_url,
                     normalized_payload: serde_json::json!({
                         "title": item.work_name,
                         "circle": item.maker_name,
@@ -143,21 +96,30 @@ impl DlsiteSource {
 #[async_trait::async_trait]
 impl MetadataSource for DlsiteSource {
     async fn search(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>> {
-        if let Some(work_id) = Self::extract_work_id(query) {
-            if let Some(candidate) = self.fetch_by_work_id(&work_id).await? {
-                return Ok(vec![candidate]);
-            }
-        }
-
-        self.search_by_keyword(query).await
+        // RJ codes get exact-match candidates from suggest; otherwise it's a keyword search.
+        let term = Self::extract_work_id(query).unwrap_or_else(|| query.to_string());
+        self.search_by_term(&term).await
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ProductAjax {
-    work_name: Option<String>,
-    work_image: Option<String>,
-    regist_date: Option<String>,
+fn cover_url_for_workno(workno: &str) -> Option<String> {
+    if workno.len() < 3 {
+        return None;
+    }
+    let (prefix, digits) = workno.split_at(2);
+    let n: u64 = digits.parse().ok()?;
+    // Folder bucket is the next multiple of 1000 (n=1..1000 -> 1000; n=1001..2000 -> 2000).
+    let folder_num = (n.saturating_sub(1) / 1000 + 1) * 1000;
+    let folder = format!("{prefix}{folder_num:0width$}", width = digits.len());
+    let category = match prefix {
+        "RJ" => "doujin",
+        "VJ" => "professional",
+        "BJ" => "books",
+        _ => return None,
+    };
+    Some(format!(
+        "https://img.dlsite.jp/modpub/images2/work/{category}/{folder}/{workno}_img_main.jpg"
+    ))
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -172,14 +134,6 @@ struct SuggestWork {
     workno: Option<String>,
     maker_name: Option<String>,
     work_type: Option<String>,
-}
-
-fn normalize_url(url: &str) -> String {
-    if url.starts_with("//") {
-        format!("https:{url}")
-    } else {
-        url.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -217,5 +171,37 @@ mod tests {
         assert_eq!(resp.work.len(), 1);
         assert_eq!(resp.work[0].workno.as_deref(), Some("RJ123456"));
         assert_eq!(resp.work[0].maker_name.as_deref(), Some("Circle"));
+    }
+
+    #[test]
+    fn builds_cover_url_for_each_prefix() {
+        assert_eq!(
+            cover_url_for_workno("RJ01402281").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/doujin/RJ01403000/RJ01402281_img_main.jpg")
+        );
+        assert_eq!(
+            cover_url_for_workno("RJ123456").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/doujin/RJ124000/RJ123456_img_main.jpg")
+        );
+        assert_eq!(
+            cover_url_for_workno("VJ015501").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/professional/VJ016000/VJ015501_img_main.jpg")
+        );
+        assert_eq!(
+            cover_url_for_workno("BJ437100").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/books/BJ438000/BJ437100_img_main.jpg")
+        );
+    }
+
+    #[test]
+    fn cover_url_buckets_exact_thousand_in_own_folder() {
+        assert_eq!(
+            cover_url_for_workno("RJ001000").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/doujin/RJ001000/RJ001000_img_main.jpg")
+        );
+        assert_eq!(
+            cover_url_for_workno("RJ001001").as_deref(),
+            Some("https://img.dlsite.jp/modpub/images2/work/doujin/RJ002000/RJ001001_img_main.jpg")
+        );
     }
 }

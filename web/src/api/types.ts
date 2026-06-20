@@ -14,6 +14,8 @@ export interface InventoryItem {
   version: string | null;
   language: string | null;
   notes: string | null;
+  displayTitle: string | null;
+  coverImageUrl: string | null;
 }
 
 export interface LibraryResponse {

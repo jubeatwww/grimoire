@@ -71,8 +71,13 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
 
   return (
     <div className="detail">
-      <div className="large-cover" />
-      <h2>{item.fileName}</h2>
+      {item.coverImageUrl ? (
+        <img className="large-cover large-cover-image" src={item.coverImageUrl} alt="" />
+      ) : (
+        <div className="large-cover" />
+      )}
+      <h2>{item.displayTitle ?? item.fileName}</h2>
+      {item.displayTitle && <p className="detail-filename">{item.fileName}</p>}
       <p>{item.primaryCategory ?? "Unsorted"} · {item.organizationStatus}</p>
       <dl>
         <dt>Legacy location</dt>

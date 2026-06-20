@@ -123,6 +123,7 @@ async fn confirm(
     let circle: Option<String> = row.get("circle");
     let source_work_id: String = row.get("source_work_id");
     let source_url: String = row.get("source_url");
+    let cover_url: Option<String> = row.get("cover_url");
     let payload: serde_json::Value = row.get("normalized_payload");
 
     let genres: Vec<String> = payload
@@ -142,7 +143,21 @@ async fn confirm(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let game_work_id = if let Some(existing_row) = existing {
-        existing_row.get::<Uuid, _>("id")
+        let id = existing_row.get::<Uuid, _>("id");
+        if cover_url.is_some() {
+            sqlx::query(
+                "UPDATE game_works
+                    SET cover_image_url = COALESCE(cover_image_url, $1),
+                        updated_at = now()
+                  WHERE id = $2",
+            )
+            .bind(&cover_url)
+            .bind(id)
+            .execute(&state.db)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        id
     } else {
         let id = Uuid::new_v4();
         let source_urls = serde_json::json!([source_url]);
@@ -152,8 +167,8 @@ async fn confirm(
         sqlx::query(
             "INSERT INTO game_works (
                 id, canonical_title, display_title, circle, source_urls,
-                dlsite_work_id, release_date, source_tags, genre_facets
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, $9)",
+                dlsite_work_id, release_date, source_tags, genre_facets, cover_image_url
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7::date, $8, $9, $10)",
         )
         .bind(id)
         .bind(&title)
@@ -164,6 +179,7 @@ async fn confirm(
         .bind(&release_date)
         .bind(&source_tags)
         .bind(&genre_facets)
+        .bind(&cover_url)
         .execute(&state.db)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
