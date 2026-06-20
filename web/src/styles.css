@@ -74,6 +74,19 @@ nav button.active, .view-switch button.active {
   background: #fff;
   color: #697586;
 }
+button.chip {
+  font: inherit;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+button.chip:hover { border-color: #b8c0cc; color: #1f252d; }
+button.chip.chip-on {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  font-weight: 600;
+}
+button.chip.muted { color: #97a1b0; }
 .main-pane { min-width: 0; }
 .topbar {
   height: 58px;
@@ -374,6 +387,31 @@ nav button.active, .view-switch button.active {
 .candidate-confirm:active:not(:disabled) { transform: translateY(1px); }
 .candidate-confirm:disabled { opacity: .5; cursor: not-allowed; }
 .error-message { color: #b91c1c; font-size: 12px; }
+.detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.detail-title-row h2 { flex: 1; margin: 0; }
+.icon-button {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d7dce2;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  text-decoration: none;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.icon-button:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
 .detail h2 { font-size: 17px; line-height: 1.25; }
 .detail dl {
   display: grid;
@@ -383,23 +421,156 @@ nav button.active, .view-switch button.active {
 .detail dt { color: #697586; }
 .detail dd { margin: 0; }
 .detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.library-table-wrap { padding: 16px; }
 .library-table {
-  width: calc(100% - 32px);
-  margin: 16px;
-  border-collapse: collapse;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
 }
-.library-table th, .library-table td {
-  border-bottom: 1px solid #d7dce2;
-  padding: 8px;
+.library-table thead th {
   text-align: left;
+  background: #f5f7fa;
+  border-bottom: 1px solid #d7dce2;
+  padding: 0;
+  font-weight: 600;
+  color: #475569;
+  position: sticky;
+  top: 110px;
+  z-index: 1;
 }
-.review-list { padding: 16px; display: grid; gap: 8px; }
-.review-list article {
-  border: 1px solid #d7dce2;
-  border-radius: 7px;
-  padding: 10px;
-  display: grid;
-  grid-template-columns: 1fr 160px auto;
-  gap: 10px;
+.library-table thead th:first-child { border-top-left-radius: 8px; }
+.library-table thead th:last-child { border-top-right-radius: 8px; }
+.library-table thead th button {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  display: flex;
   align-items: center;
+  gap: 4px;
 }
+.library-table thead th button:hover { color: #0f766e; }
+.library-table thead th.col-cover { padding: 0; }
+.sort-arrow { font-size: 9px; opacity: .6; }
+.library-table tbody tr {
+  cursor: pointer;
+  transition: background .1s;
+}
+.library-table tbody tr:hover { background: #f5f7fa; }
+.library-table tbody tr.selected { background: #e7f5f2; }
+.library-table tbody tr.selected:hover { background: #d9efeb; }
+.library-table tbody td {
+  border-bottom: 1px solid #e4e8ed;
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+.library-table .col-cover { width: 56px; padding: 6px 0 6px 12px; }
+.library-table .col-cover img,
+.library-table .col-cover .thumb-fallback {
+  width: 48px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+  display: block;
+}
+.library-table .col-title strong { display: block; font-weight: 600; color: #1f252d; }
+.library-table .col-title small { color: #97a1b0; font-size: 11px; }
+.library-table .col-facets { color: #697586; }
+.library-table em { color: #97a1b0; font-style: normal; }
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+.status-pending { background: #fef3c7; color: #92400e; }
+.status-matched { background: #dbeafe; color: #1e40af; }
+.status-confirmed { background: #d1fae5; color: #065f46; }
+.status-ignored { background: #e5e7eb; color: #6b7280; }
+.empty-state { padding: 24px; text-align: center; color: #97a1b0; }
+
+.review-queue { padding: 16px; }
+.review-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.review-header h2 { margin: 0; font-size: 17px; }
+.review-header p { margin: 0; color: #697586; font-size: 12px; }
+.review-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.review-card {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #d7dce2;
+  border-radius: 8px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.review-card:hover { border-color: #b0c8c4; box-shadow: 0 2px 8px rgba(15, 23, 42, .06); }
+.review-thumb {
+  width: 64px;
+  aspect-ratio: 4 / 3;
+  border-radius: 5px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+}
+.review-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.review-thumb .thumb-fallback { width: 100%; height: 100%; }
+.review-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.review-body strong {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: #697586;
+}
+.review-rj {
+  font: 600 11px/1 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: #eef1f4;
+  color: #475569;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.review-action {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .12s;
+}
+.review-action:hover { background: #0d6963; }
+.review-empty {
+  padding: 60px 24px;
+  text-align: center;
+  color: #97a1b0;
+}
+.review-empty h2 { margin: 0 0 4px; font-size: 17px; color: #475569; }
+.review-empty p { margin: 0; font-size: 12px; }

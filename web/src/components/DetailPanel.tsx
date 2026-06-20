@@ -5,6 +5,7 @@ import { useImagePreview } from "./useImagePreview";
 
 interface DetailPanelProps {
   item: InventoryItem | null;
+  autoSearchToken?: number;
   onMetadataConfirmed?: () => void;
 }
 
@@ -19,7 +20,7 @@ function cleanQuery(filename: string): string {
     .trim();
 }
 
-export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
+export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: DetailPanelProps) {
   const [candidates, setCandidates] = useState<MetadataCandidate[]>([]);
   const [searching, setSearching] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -30,26 +31,14 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
   const markErrored = (id: string) =>
     setCoverErrored((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
 
-  useEffect(() => {
-    if (item) {
-      setQuery(cleanQuery(item.fileName));
-      setCandidates([]);
-      setError(null);
-    }
-  }, [item?.id]);
-
-  if (!item) {
-    return <div className="empty-detail">Select a game</div>;
-  }
-
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  const runSearch = async (q: string) => {
+    if (!q.trim()) return;
     setSearching(true);
     setError(null);
     setCandidates([]);
     clearPreview();
     try {
-      const result = await searchMetadata(query.trim());
+      const result = await searchMetadata(q.trim());
       setCandidates(result.candidates);
       if (result.candidates.length === 0) {
         setError("No results found");
@@ -60,6 +49,29 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
       setSearching(false);
     }
   };
+
+  useEffect(() => {
+    if (item) {
+      setQuery(cleanQuery(item.fileName));
+      setCandidates([]);
+      setError(null);
+    }
+  }, [item?.id]);
+
+  useEffect(() => {
+    if (autoSearchToken && autoSearchToken > 0 && item) {
+      const q = cleanQuery(item.fileName);
+      setQuery(q);
+      void runSearch(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSearchToken]);
+
+  if (!item) {
+    return <div className="empty-detail">Select a game</div>;
+  }
+
+  const handleSearch = () => runSearch(query);
 
   const handleConfirm = async (candidate: MetadataCandidate) => {
     setConfirming(candidate.id);
@@ -83,7 +95,21 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
       ) : (
         <div className="large-cover" />
       )}
-      <h2>{item.displayTitle ?? item.fileName}</h2>
+      <div className="detail-title-row">
+        <h2>{item.displayTitle ?? item.fileName}</h2>
+        <a
+          className="icon-button"
+          href={downloadUrl(item.id)}
+          title="Download"
+          aria-label="Download"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 3v12" />
+            <path d="m6 11 6 6 6-6" />
+            <path d="M5 21h14" />
+          </svg>
+        </a>
+      </div>
       {item.displayTitle && <p className="detail-filename">{item.fileName}</p>}
       <p>{item.primaryCategory ?? "Unsorted"} · {item.organizationStatus}</p>
       <dl>
@@ -105,9 +131,6 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
         <button onClick={handleSearch} disabled={searching || !query.trim()}>
           {searching ? "..." : "Search"}
         </button>
-      </div>
-      <div className="detail-actions">
-        <a className="button" href={downloadUrl(item.id)}>Download</a>
       </div>
       {error && <p className="error-message">{error}</p>}
       {candidates.length > 0 && (
