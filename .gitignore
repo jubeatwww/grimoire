@@ -11,3 +11,4 @@ var/
 .claude
 .codex
 *.stackdump
+*.tsbuildinfo
