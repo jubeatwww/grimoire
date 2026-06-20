@@ -12,10 +12,25 @@ interface AppShellProps {
   detail: ReactNode;
   filters: Filters;
   onToggleFilter: (group: FilterGroup, value: string) => void;
+  chromeless?: boolean;
 }
 
-export function AppShell({ children, detail, filters, onToggleFilter }: AppShellProps) {
+export function AppShell({
+  children,
+  detail,
+  filters,
+  onToggleFilter,
+  chromeless,
+}: AppShellProps) {
   const isOn = (group: FilterGroup, value: string) => filters[group].has(value);
+
+  if (chromeless) {
+    return (
+      <div className="app-shell app-shell-chromeless">
+        <main className="main-pane">{children}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">

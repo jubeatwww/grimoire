@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { confirmCandidate, downloadUrl, searchMetadata } from "../api/client";
+import {
+  confirmCandidate,
+  downloadUrl,
+  linkInventoryItem,
+  refreshMetadata,
+  searchMetadata,
+} from "../api/client";
 import type { InventoryItem, MetadataCandidate } from "../api/types";
 import { useImagePreview } from "./useImagePreview";
 
@@ -38,6 +44,8 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
   const [confirming, setConfirming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [linkInput, setLinkInput] = useState("");
+  const [linking, setLinking] = useState(false);
   const { hoverProps, preview, clear: clearPreview } = useImagePreview();
   const [coverErrored, setCoverErrored] = useState<Set<string>>(new Set());
   const markErrored = (id: string) =>
@@ -67,11 +75,30 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
       setQuery(cleanQuery(item.fileName));
       setCandidates([]);
       setError(null);
+      setLinkInput("");
     }
   }, [item?.id]);
 
+  const runRefresh = async (itemId: string) => {
+    setError(null);
+    setSearching(true);
+    try {
+      await refreshMetadata(itemId);
+      onMetadataConfirmed?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
   useEffect(() => {
-    if (autoSearchToken && autoSearchToken > 0 && item) {
+    if (!autoSearchToken || autoSearchToken === 0 || !item) return;
+    // Branch by item state: pending → search candidates;
+    // confirmed-without-description → refresh detail from DLsite.
+    if (item.organizationStatus === "confirmed" && !item.description) {
+      void runRefresh(item.id);
+    } else {
       const q = cleanQuery(item.fileName);
       setQuery(q);
       void runSearch(q);
@@ -84,6 +111,24 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
   }
 
   const handleSearch = () => runSearch(query);
+
+  const handleLink = async () => {
+    const v = linkInput.trim();
+    if (!v) return;
+    setLinking(true);
+    setError(null);
+    try {
+      await linkInventoryItem(item.id, v);
+      setLinkInput("");
+      setCandidates([]);
+      clearPreview();
+      onMetadataConfirmed?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Link failed");
+    } finally {
+      setLinking(false);
+    }
+  };
 
   const handleConfirm = async (candidate: MetadataCandidate) => {
     setConfirming(candidate.id);
@@ -128,6 +173,14 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         <span className={`status-pill status-${item.organizationStatus}`}>
           {item.organizationStatus}
         </span>
+        {(item.workTypeLabel || item.workType) && (
+          <span
+            className="work-type-pill"
+            title={item.workType ?? undefined}
+          >
+            {item.workTypeLabel ?? item.workType}
+          </span>
+        )}
         <span>{item.primaryCategory ?? "Unsorted"}</span>
         {item.fileType && <span>· {item.fileType}</span>}
         {item.fileSizeBytes != null && (
@@ -199,6 +252,22 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         />
         <button onClick={handleSearch} disabled={searching || !query.trim()}>
           {searching ? "..." : "Search"}
+        </button>
+      </div>
+      <div className="detail-link">
+        <input
+          type="text"
+          value={linkInput}
+          onChange={(e) => setLinkInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleLink()}
+          placeholder="Direct link · paste DLsite URL or RJ/VJ/BJ code"
+        />
+        <button
+          onClick={handleLink}
+          disabled={linking || !linkInput.trim()}
+          className="detail-link-button"
+        >
+          {linking ? "..." : "Link"}
         </button>
       </div>
       {error && <p className="error-message">{error}</p>}

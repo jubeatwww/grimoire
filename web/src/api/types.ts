@@ -1,4 +1,9 @@
-export type OrganizationStatus = "pending" | "matched" | "confirmed" | "ignored";
+export type OrganizationStatus =
+  | "pending"
+  | "matched"
+  | "confirmed"
+  | "ignored"
+  | "no_match";
 export type PlayStatus = "not_played" | "want_to_play" | "playing" | "completed" | "dropped";
 
 export interface InventoryItem {
@@ -28,6 +33,8 @@ export interface InventoryItem {
   rateAverage: number | null;
   rateCount: number | null;
   priceJpy: number | null;
+  workType: string | null;
+  workTypeLabel: string | null;
 }
 
 export interface LibraryResponse {

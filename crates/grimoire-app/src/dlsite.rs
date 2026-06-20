@@ -25,6 +25,8 @@ pub struct ProductDetail {
     pub rate_average: Option<f32>,
     pub rate_count: Option<i32>,
     pub price_jpy: Option<i32>,
+    pub work_type: Option<String>,
+    pub work_type_label: Option<String>,
 }
 
 static RJ_CODE_RE: LazyLock<Regex> =
@@ -195,6 +197,8 @@ struct ProductJson {
     rate_average_2dp: Option<f32>,
     rate_count: Option<i32>,
     price: Option<i32>,
+    work_type: Option<String>,
+    work_type_string: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -239,6 +243,8 @@ impl ProductJson {
             rate_average: self.rate_average_2dp,
             rate_count: self.rate_count,
             price_jpy: self.price,
+            work_type: self.work_type,
+            work_type_label: self.work_type_string,
         }
     }
 }

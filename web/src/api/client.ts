@@ -45,6 +45,40 @@ export async function triggerScan(): Promise<{ scanned: number; warnings: string
   return response.json();
 }
 
+export async function skipInventoryItem(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/skip`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Skip failed: ${r.status}`);
+}
+
+export async function linkInventoryItem(
+  itemId: string,
+  worknoOrUrl: string,
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId, worknoOrUrl }),
+  });
+  if (!r.ok) {
+    if (r.status === 400) throw new Error("Couldn't find an RJ/VJ/BJ code in that input");
+    if (r.status === 404) throw new Error("DLsite has no record for that workno");
+    throw new Error(`Link failed: ${r.status}`);
+  }
+}
+
+export async function refreshMetadata(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Refresh failed: ${r.status}`);
+}
+
 export function downloadUrl(itemId: string): string {
   return `${API_BASE}/api/downloads/${itemId}`;
 }

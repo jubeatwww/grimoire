@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { InventoryItem } from "../api/types";
 
-type SortKey = "name" | "status" | "primary" | "circle";
+type SortKey = "name" | "status" | "primary" | "circle" | "workType";
 
 interface LibraryTableProps {
   items: InventoryItem[];
@@ -34,6 +34,8 @@ function sortValue(item: InventoryItem, key: SortKey): string | number {
       return (item.primaryCategory ?? "~").toLowerCase();
     case "circle":
       return ((item.displayTitle ? "" : "~") + (item.fileName)).toLowerCase();
+    case "workType":
+      return (item.workType ?? "~").toLowerCase();
   }
 }
 
@@ -69,6 +71,9 @@ export function LibraryTable({ items, selectedId, onSelect }: LibraryTableProps)
             <th>
               <button onClick={() => handleSort("primary")}>Primary{arrow("primary")}</button>
             </th>
+            <th>
+              <button onClick={() => handleSort("workType")}>Type{arrow("workType")}</button>
+            </th>
             <th>Legacy</th>
             <th>Facets</th>
           </tr>
@@ -97,6 +102,15 @@ export function LibraryTable({ items, selectedId, onSelect }: LibraryTableProps)
                 </span>
               </td>
               <td>{item.primaryCategory ?? <em>Unsorted</em>}</td>
+              <td>
+                {item.workTypeLabel || item.workType ? (
+                  <span className="work-type-pill" title={item.workType ?? undefined}>
+                    {item.workTypeLabel ?? item.workType}
+                  </span>
+                ) : (
+                  <em>—</em>
+                )}
+              </td>
               <td>{item.legacyLocation ?? <em>—</em>}</td>
               <td className="col-facets">
                 {item.genreFacets.length > 0 ? item.genreFacets.join(", ") : <em>—</em>}
