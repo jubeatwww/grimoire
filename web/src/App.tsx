@@ -38,7 +38,11 @@ export function App() {
   return (
     <AppShell detail={<DetailPanel item={selectedItem} onMetadataConfirmed={handleMetadataConfirmed} />}>
       <header className="topbar">
-        <input aria-label="Search title, filename, circle, tag, DLsite id" />
+        <input
+          type="search"
+          aria-label="Search title, filename, circle, tag, DLsite id"
+          placeholder="Search title, filename, circle, tag, or DLsite ID"
+        />
         <button onClick={handleScan} disabled={scanning}>{scanning ? "Scanning..." : "Scan"}</button>
         <button className="primary">Import</button>
       </header>

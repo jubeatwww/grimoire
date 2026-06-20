@@ -1,4 +1,5 @@
 import type { InventoryItem } from "../api/types";
+import { useImagePreview } from "./useImagePreview";
 
 interface LibraryGridProps {
   items: InventoryItem[];
@@ -7,6 +8,7 @@ interface LibraryGridProps {
 }
 
 export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
+  const { hoverProps, preview } = useImagePreview();
   return (
     <div className="library-grid">
       {items.map((item, index) => (
@@ -14,6 +16,7 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
           className={`game-card ${selectedId === item.id ? "selected" : ""}`}
           key={item.id}
           onClick={() => onSelect(item)}
+          {...hoverProps(item.coverImageUrl)}
         >
           {item.coverImageUrl ? (
             <div className="cover cover-image">
@@ -32,6 +35,7 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
           </div>
         </button>
       ))}
+      {preview}
     </div>
   );
 }

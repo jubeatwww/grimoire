@@ -31,6 +31,8 @@ export interface MetadataCandidate {
   title: string;
   circle: string | null;
   coverUrl: string | null;
+  workType: string | null;
+  introShort: string | null;
 }
 
 export interface SearchResponse {

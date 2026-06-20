@@ -28,6 +28,8 @@ struct CandidateResponse {
     title: String,
     circle: Option<String>,
     cover_url: Option<String>,
+    work_type: Option<String>,
+    intro_short: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -71,15 +73,29 @@ async fn search(
 
     let response = candidates
         .into_iter()
-        .map(|c| CandidateResponse {
-            id: c.id.to_string(),
-            source_name: c.source_name,
-            source_work_id: c.source_work_id,
-            source_url: c.source_url,
-            rank: c.rank,
-            title: c.title,
-            circle: c.circle,
-            cover_url: c.cover_url,
+        .map(|c| {
+            let work_type = c
+                .normalized_payload
+                .get("work_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let intro_short = c
+                .normalized_payload
+                .get("intro_s")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            CandidateResponse {
+                id: c.id.to_string(),
+                source_name: c.source_name,
+                source_work_id: c.source_work_id,
+                source_url: c.source_url,
+                rank: c.rank,
+                title: c.title,
+                circle: c.circle,
+                cover_url: c.cover_url,
+                work_type,
+                intro_short,
+            }
         })
         .collect();
 

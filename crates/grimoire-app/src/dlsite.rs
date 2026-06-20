@@ -61,6 +61,8 @@ impl DlsiteSource {
         let candidates = suggest
             .work
             .into_iter()
+            // Drop delisted ("ana") works — their pages 404 and image URLs don't resolve.
+            .filter(|item| !item.is_ana.unwrap_or(false))
             .enumerate()
             .map(|(i, item)| {
                 let work_id = item.workno.unwrap_or_default();
@@ -84,6 +86,7 @@ impl DlsiteSource {
                         "title": item.work_name,
                         "circle": item.maker_name,
                         "work_type": item.work_type,
+                        "intro_s": item.intro_s,
                     }),
                 }
             })
@@ -134,6 +137,8 @@ struct SuggestWork {
     workno: Option<String>,
     maker_name: Option<String>,
     work_type: Option<String>,
+    intro_s: Option<String>,
+    is_ana: Option<bool>,
 }
 
 #[cfg(test)]

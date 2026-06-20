@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { confirmCandidate, downloadUrl, searchMetadata } from "../api/client";
 import type { InventoryItem, MetadataCandidate } from "../api/types";
+import { useImagePreview } from "./useImagePreview";
 
 interface DetailPanelProps {
   item: InventoryItem | null;
@@ -24,6 +25,10 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const { hoverProps, preview, clear: clearPreview } = useImagePreview();
+  const [coverErrored, setCoverErrored] = useState<Set<string>>(new Set());
+  const markErrored = (id: string) =>
+    setCoverErrored((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
 
   useEffect(() => {
     if (item) {
@@ -42,6 +47,7 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
     setSearching(true);
     setError(null);
     setCandidates([]);
+    clearPreview();
     try {
       const result = await searchMetadata(query.trim());
       setCandidates(result.candidates);
@@ -61,6 +67,7 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
     try {
       await confirmCandidate(candidate.id, item.id);
       setCandidates([]);
+      clearPreview();
       onMetadataConfirmed?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Confirm failed");
@@ -107,25 +114,51 @@ export function DetailPanel({ item, onMetadataConfirmed }: DetailPanelProps) {
         <div className="candidates">
           <h3>Candidates</h3>
           <ul className="candidate-list">
-            {candidates.map((c) => (
-              <li key={c.id} className="candidate-item">
-                {c.coverUrl && <img src={c.coverUrl} alt="" className="candidate-cover" />}
-                <div className="candidate-info">
-                  <strong>{c.title}</strong>
-                  <small>{c.circle ?? "Unknown circle"} · {c.sourceWorkId}</small>
-                </div>
-                <button
-                  className="primary"
-                  onClick={() => handleConfirm(c)}
-                  disabled={confirming === c.id}
-                >
-                  {confirming === c.id ? "..." : "Confirm"}
-                </button>
-              </li>
-            ))}
+            {candidates.map((c) => {
+              const coverOk = c.coverUrl && !coverErrored.has(c.id);
+              return (
+                <li key={c.id} className="candidate-item" {...hoverProps(coverOk ? c.coverUrl : null)}>
+                  {coverOk ? (
+                    <img
+                      src={c.coverUrl!}
+                      alt=""
+                      className="candidate-cover"
+                      onError={() => markErrored(c.id)}
+                    />
+                  ) : (
+                    <div className="candidate-cover candidate-cover-fallback" aria-hidden />
+                  )}
+                  <div className="candidate-info">
+                    <strong title={c.title}>{c.title}</strong>
+                    <div className="candidate-meta">
+                      <a
+                        className="candidate-link"
+                        href={c.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open on DLsite"
+                      >
+                        {c.sourceWorkId} <span aria-hidden>↗</span>
+                      </a>
+                      {c.workType && <span className="candidate-type">{c.workType}</span>}
+                      {c.circle && <span className="candidate-circle">{c.circle}</span>}
+                    </div>
+                    {c.introShort && <p className="candidate-intro">{c.introShort}</p>}
+                    <button
+                      className="candidate-confirm"
+                      onClick={() => handleConfirm(c)}
+                      disabled={confirming === c.id}
+                    >
+                      {confirming === c.id ? "…" : "Confirm"}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
+      {preview}
     </div>
   );
 }
