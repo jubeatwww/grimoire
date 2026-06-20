@@ -1,10 +1,31 @@
 use crate::metadata_source::MetadataSource;
+use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
 use regex::Regex;
 use reqwest::Client;
 use serde::Deserialize;
 use std::sync::LazyLock;
 use uuid::Uuid;
+
+const DLSITE_IMG_BASE: &str = "https://img.dlsite.jp/";
+
+#[derive(Debug, Clone, Default)]
+pub struct ProductDetail {
+    pub work_name: Option<String>,
+    pub maker_name: Option<String>,
+    pub description: Option<String>,
+    pub release_date: Option<NaiveDate>,
+    pub series: Option<String>,
+    pub tags: Vec<String>,
+    pub cover_image_url: Option<String>,
+    pub preview_image_urls: Vec<String>,
+    pub file_type: Option<String>,
+    pub file_size_bytes: Option<i64>,
+    pub dl_count: Option<i32>,
+    pub rate_average: Option<f32>,
+    pub rate_count: Option<i32>,
+    pub price_jpy: Option<i32>,
+}
 
 static RJ_CODE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(RJ|VJ|BJ)\d{6,8}").unwrap());
@@ -34,6 +55,20 @@ impl DlsiteSource {
 
     pub fn extract_work_id(filename: &str) -> Option<String> {
         RJ_CODE_RE.find(filename).map(|m| m.as_str().to_uppercase())
+    }
+
+    pub async fn fetch_product_detail(&self, workno: &str) -> anyhow::Result<Option<ProductDetail>> {
+        let url = format!(
+            "https://www.dlsite.com/maniax/api/=/product.json?workno={}",
+            workno
+        );
+        let resp = self.client.get(&url).send().await?;
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let mut items: Vec<ProductJson> = resp.json().await?;
+        let Some(p) = items.pop() else { return Ok(None); };
+        Ok(Some(p.into_detail()))
     }
 
     async fn suggest(&self, term: &str) -> anyhow::Result<SuggestResponse> {
@@ -139,6 +174,79 @@ struct SuggestWork {
     work_type: Option<String>,
     intro_s: Option<String>,
     is_ana: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProductJson {
+    work_name: Option<String>,
+    maker_name: Option<String>,
+    intro: Option<String>,
+    intro_s: Option<String>,
+    regist_date: Option<String>,
+    series_name: Option<String>,
+    #[serde(default)]
+    genres: Vec<GenreJson>,
+    image_main: Option<ImageJson>,
+    #[serde(default)]
+    image_samples: Vec<ImageJson>,
+    file_type_string: Option<String>,
+    contents_file_size: Option<i64>,
+    dl_count: Option<i32>,
+    rate_average_2dp: Option<f32>,
+    rate_count: Option<i32>,
+    price: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GenreJson {
+    name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImageJson {
+    relative_url: Option<String>,
+}
+
+impl ImageJson {
+    fn to_url(&self) -> Option<String> {
+        self.relative_url
+            .as_deref()
+            .map(|u| format!("{DLSITE_IMG_BASE}{}", u.trim_start_matches('/')))
+    }
+}
+
+impl ProductJson {
+    fn into_detail(self) -> ProductDetail {
+        ProductDetail {
+            work_name: self.work_name,
+            maker_name: self.maker_name,
+            description: self.intro.or(self.intro_s),
+            release_date: self
+                .regist_date
+                .as_deref()
+                .and_then(parse_dlsite_date),
+            series: self.series_name.filter(|s| !s.is_empty()),
+            tags: self.genres.into_iter().filter_map(|g| g.name).collect(),
+            cover_image_url: self.image_main.and_then(|i| i.to_url()),
+            preview_image_urls: self
+                .image_samples
+                .into_iter()
+                .filter_map(|i| i.to_url())
+                .collect(),
+            file_type: self.file_type_string,
+            file_size_bytes: self.contents_file_size,
+            dl_count: self.dl_count,
+            rate_average: self.rate_average_2dp,
+            rate_count: self.rate_count,
+            price_jpy: self.price,
+        }
+    }
+}
+
+fn parse_dlsite_date(s: &str) -> Option<NaiveDate> {
+    // regist_date is "YYYY-MM-DD HH:MM:SS" — keep the date portion.
+    let date_part = s.split_whitespace().next()?;
+    NaiveDate::parse_from_str(date_part, "%Y-%m-%d").ok()
 }
 
 #[cfg(test)]

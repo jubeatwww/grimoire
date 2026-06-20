@@ -203,6 +203,46 @@ async fn confirm(
         id
     };
 
+    // Best-effort enrichment from DLsite product.json. Failures don't block confirmation —
+    // user-edited fields (primary_category, genre_facets, display_title) are preserved via COALESCE.
+    if let Ok(Some(detail)) = DlsiteSource::new().fetch_product_detail(&source_work_id).await {
+        let tags_json = serde_json::json!(detail.tags);
+        let previews_json = serde_json::json!(detail.preview_image_urls);
+        sqlx::query(
+            "UPDATE game_works SET
+                description       = COALESCE($1, description),
+                release_date      = COALESCE($2, release_date),
+                series            = COALESCE($3, series),
+                source_tags       = $4,
+                cover_image_url   = COALESCE($5, cover_image_url),
+                preview_image_urls = $6,
+                file_type         = COALESCE($7, file_type),
+                file_size_bytes   = COALESCE($8, file_size_bytes),
+                dl_count          = COALESCE($9, dl_count),
+                rate_average      = COALESCE($10, rate_average),
+                rate_count        = COALESCE($11, rate_count),
+                price_jpy         = COALESCE($12, price_jpy),
+                updated_at        = now()
+             WHERE id = $13",
+        )
+        .bind(detail.description)
+        .bind(detail.release_date)
+        .bind(detail.series)
+        .bind(tags_json)
+        .bind(detail.cover_image_url)
+        .bind(previews_json)
+        .bind(detail.file_type)
+        .bind(detail.file_size_bytes)
+        .bind(detail.dl_count)
+        .bind(detail.rate_average)
+        .bind(detail.rate_count)
+        .bind(detail.price_jpy)
+        .bind(game_work_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
     // Link inventory item to game_work
     sqlx::query(
         "UPDATE inventory_items SET game_work_id = $1, organization_status = 'confirmed', updated_at = now()

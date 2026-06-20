@@ -9,6 +9,18 @@ interface DetailPanelProps {
   onMetadataConfirmed?: () => void;
 }
 
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 ? 2 : 1)} ${units[i]}`;
+}
+
 function cleanQuery(filename: string): string {
   return filename
     .replace(/\.(zip|rar|7z|exe|iso)$/i, "")
@@ -111,8 +123,65 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         </a>
       </div>
       {item.displayTitle && <p className="detail-filename">{item.fileName}</p>}
-      <p>{item.primaryCategory ?? "Unsorted"} · {item.organizationStatus}</p>
+      {item.circle && <p className="detail-circle">{item.circle}</p>}
+      <div className="detail-status-row">
+        <span className={`status-pill status-${item.organizationStatus}`}>
+          {item.organizationStatus}
+        </span>
+        <span>{item.primaryCategory ?? "Unsorted"}</span>
+        {item.fileType && <span>· {item.fileType}</span>}
+        {item.fileSizeBytes != null && (
+          <span>· {formatBytes(item.fileSizeBytes)}</span>
+        )}
+      </div>
+      {item.rateAverage != null && item.rateCount != null && item.rateCount > 0 && (
+        <p className="detail-rating">
+          <span className="rating-stars">{"★".repeat(Math.round(item.rateAverage))}</span>
+          <span>{item.rateAverage.toFixed(2)}</span>
+          <span className="rating-count">({item.rateCount.toLocaleString()})</span>
+          {item.dlCount != null && (
+            <span className="rating-dlcount">· {item.dlCount.toLocaleString()} DL</span>
+          )}
+        </p>
+      )}
+      {item.sourceTags && item.sourceTags.length > 0 && (
+        <div className="detail-tags">
+          {item.sourceTags.map((t) => (
+            <span key={t} className="detail-tag">{t}</span>
+          ))}
+        </div>
+      )}
+      {item.description && (
+        <p className="detail-description">{item.description}</p>
+      )}
+      {item.previewImageUrls && item.previewImageUrls.length > 0 && (
+        <div className="detail-previews">
+          {item.previewImageUrls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="detail-preview"
+            >
+              <img src={url} alt="" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
       <dl>
+        {item.releaseDate && (
+          <>
+            <dt>Release</dt>
+            <dd>{item.releaseDate}</dd>
+          </>
+        )}
+        {item.series && (
+          <>
+            <dt>Series</dt>
+            <dd>{item.series}</dd>
+          </>
+        )}
         <dt>Legacy location</dt>
         <dd>{item.legacyLocation ?? "none"}</dd>
         <dt>Version</dt>

@@ -25,6 +25,18 @@ struct LibraryItem {
     notes: Option<String>,
     display_title: Option<String>,
     cover_image_url: Option<String>,
+    circle: Option<String>,
+    description: Option<String>,
+    release_date: Option<chrono::NaiveDate>,
+    series: Option<String>,
+    source_tags: Vec<String>,
+    preview_image_urls: Vec<String>,
+    file_type: Option<String>,
+    file_size_bytes: Option<i64>,
+    dl_count: Option<i32>,
+    rate_average: Option<f32>,
+    rate_count: Option<i32>,
+    price_jpy: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -41,7 +53,10 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
         "SELECT i.id, i.source_id, i.file_name, i.legacy_location, i.primary_category,
                 i.genre_facets, i.organization_status, i.play_status, i.rating,
                 i.version, i.language, i.notes,
-                g.display_title, g.cover_image_url
+                g.display_title, g.cover_image_url, g.circle, g.description,
+                g.release_date, g.series, g.source_tags, g.preview_image_urls,
+                g.file_type, g.file_size_bytes, g.dl_count, g.rate_average,
+                g.rate_count, g.price_jpy
          FROM inventory_items i
          LEFT JOIN game_works g ON g.id = i.game_work_id
          ORDER BY i.file_name",
@@ -54,6 +69,8 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
         .iter()
         .map(|row| {
             let genre_facets: serde_json::Value = row.get("genre_facets");
+            let source_tags: Option<serde_json::Value> = row.get("source_tags");
+            let preview_urls: Option<serde_json::Value> = row.get("preview_image_urls");
             LibraryItem {
                 id: row.get::<uuid::Uuid, _>("id").to_string(),
                 source_id: row.get("source_id"),
@@ -69,6 +86,22 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
                 notes: row.get("notes"),
                 display_title: row.get("display_title"),
                 cover_image_url: row.get("cover_image_url"),
+                circle: row.get("circle"),
+                description: row.get("description"),
+                release_date: row.get("release_date"),
+                series: row.get("series"),
+                source_tags: source_tags
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default(),
+                preview_image_urls: preview_urls
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default(),
+                file_type: row.get("file_type"),
+                file_size_bytes: row.get("file_size_bytes"),
+                dl_count: row.get("dl_count"),
+                rate_average: row.get("rate_average"),
+                rate_count: row.get("rate_count"),
+                price_jpy: row.get("price_jpy"),
             }
         })
         .collect();

@@ -16,6 +16,18 @@ export interface InventoryItem {
   notes: string | null;
   displayTitle: string | null;
   coverImageUrl: string | null;
+  circle: string | null;
+  description: string | null;
+  releaseDate: string | null;
+  series: string | null;
+  sourceTags: string[];
+  previewImageUrls: string[];
+  fileType: string | null;
+  fileSizeBytes: number | null;
+  dlCount: number | null;
+  rateAverage: number | null;
+  rateCount: number | null;
+  priceJpy: number | null;
 }
 
 export interface LibraryResponse {
