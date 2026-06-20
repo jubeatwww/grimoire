@@ -258,7 +258,7 @@ button.chip.muted { color: #97a1b0; }
   padding: 8px;
   position: relative;
 }
-.cover > span {
+.cover-status {
   position: absolute;
   top: 8px;
   left: 8px;
@@ -387,7 +387,113 @@ button.chip.muted { color: #97a1b0; }
   text-transform: uppercase;
   margin: 16px 0 8px;
   letter-spacing: .04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.candidate-group + .candidate-group { margin-top: 8px; }
+.candidate-source-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #fff;
+}
+.candidate-source-dlsite { background: #0f766e; }
+.candidate-source-vndb { background: #6d28d9; }
+.candidate-group-count { font-size: 11px; color: #97a1b0; text-transform: none; }
+.detail-source-actions {
+  display: flex;
+  gap: 6px;
+  margin: -4px 0 10px;
+}
+.source-refresh {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d7dce2;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.source-refresh:hover:not(:disabled) {
+  background: #f5f7fa;
+  border-color: #b8c0cc;
+  color: #1f252d;
+}
+.source-refresh-dlsite:hover:not(:disabled) {
+  color: #0f766e;
+  border-color: #0f766e;
+}
+.source-refresh-vndb:hover:not(:disabled) {
+  color: #6d28d9;
+  border-color: #6d28d9;
+}
+.source-refresh:disabled { opacity: .4; cursor: not-allowed; }
+.source-reset {
+  height: 28px;
+  padding: 0 10px;
+  margin-left: auto;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.source-reset:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+.inline-edit {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+  transition: border-color .1s, background .1s;
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -2px;
+}
+.inline-edit:hover { border-bottom-color: #b8c0cc; background: #f5f7fa; }
+.inline-edit:focus-visible { outline: 2px solid #0f766e; outline-offset: 1px; }
+.inline-edit-placeholder { color: #97a1b0; font-style: italic; }
+.inline-edit-input {
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #0f766e;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin: -2px 0;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .14);
+  min-width: 80px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.primary-select {
+  font: inherit;
+  font-size: 11px;
+  color: #697586;
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  padding: 1px 4px;
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.primary-select:hover { border-color: #b8c0cc; background: #f5f7fa; color: #1f252d; }
+.primary-select:focus { outline: 2px solid #0f766e; outline-offset: 1px; }
 .candidate-list {
   list-style: none;
   padding: 0;

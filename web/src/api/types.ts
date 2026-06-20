@@ -35,6 +35,8 @@ export interface InventoryItem {
   priceJpy: number | null;
   workType: string | null;
   workTypeLabel: string | null;
+  dlsiteWorkId: string | null;
+  vndbId: string | null;
 }
 
 export interface LibraryResponse {

@@ -11,10 +11,11 @@ interface OrganizeModeProps {
   onExit: () => void;
 }
 
-type Filter = "pending" | "needs-detail";
+type Filter = "pending" | "needs-detail" | "no-dlsite";
 const ALL_FILTERS: { id: Filter; label: string; desc: string }[] = [
-  { id: "pending", label: "Pending", desc: "no DLsite match yet" },
+  { id: "pending", label: "Pending", desc: "no source match yet" },
   { id: "needs-detail", label: "Confirmed · missing detail", desc: "needs metadata refresh" },
+  { id: "no-dlsite", label: "No DLsite match", desc: "skipped before — try VNDB" },
 ];
 
 function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
@@ -26,6 +27,7 @@ function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
   ) {
     return true;
   }
+  if (filters.has("no-dlsite") && item.organizationStatus === "no_match") return true;
   return false;
 }
 

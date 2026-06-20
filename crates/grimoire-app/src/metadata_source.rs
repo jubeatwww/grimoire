@@ -1,9 +1,33 @@
+use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
 use uuid::Uuid;
 
 #[async_trait::async_trait]
 pub trait MetadataSource {
     async fn search(&self, query: &str) -> anyhow::Result<Vec<MetadataCandidate>>;
+}
+
+/// Normalised product detail shared across sources. Fields the source does not
+/// have stay `None` / empty; the persistence layer uses COALESCE / overwrite
+/// per the configured precedence.
+#[derive(Debug, Clone, Default)]
+pub struct ProductDetail {
+    pub work_name: Option<String>,
+    pub maker_name: Option<String>,
+    pub description: Option<String>,
+    pub release_date: Option<NaiveDate>,
+    pub series: Option<String>,
+    pub tags: Vec<String>,
+    pub cover_image_url: Option<String>,
+    pub preview_image_urls: Vec<String>,
+    pub file_type: Option<String>,
+    pub file_size_bytes: Option<i64>,
+    pub dl_count: Option<i32>,
+    pub rate_average: Option<f32>,
+    pub rate_count: Option<i32>,
+    pub price_jpy: Option<i32>,
+    pub work_type: Option<String>,
+    pub work_type_label: Option<String>,
 }
 
 pub struct FixtureMetadataSource;

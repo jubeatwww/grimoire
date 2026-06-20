@@ -6,3 +6,4 @@ pub mod organization;
 pub mod scanner;
 pub mod staging;
 pub mod storage;
+pub mod vndb;

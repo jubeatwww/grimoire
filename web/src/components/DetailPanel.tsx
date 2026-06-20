@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
+import { PRIMARY_CATEGORIES } from "../App";
 import {
   confirmCandidate,
   downloadUrl,
+  editInventoryItem,
+  editWork,
   linkInventoryItem,
   refreshMetadata,
+  resetInventoryItem,
   searchMetadata,
 } from "../api/client";
 import type { InventoryItem, MetadataCandidate } from "../api/types";
+import { InlineText } from "./InlineText";
 import { useImagePreview } from "./useImagePreview";
 
 interface DetailPanelProps {
@@ -79,11 +84,11 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
     }
   }, [item?.id]);
 
-  const runRefresh = async (itemId: string) => {
+  const runRefresh = async (itemId: string, source: "dlsite" | "vndb") => {
     setError(null);
     setSearching(true);
     try {
-      await refreshMetadata(itemId);
+      await refreshMetadata(itemId, source);
       onMetadataConfirmed?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Refresh failed");
@@ -94,10 +99,11 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
 
   useEffect(() => {
     if (!autoSearchToken || autoSearchToken === 0 || !item) return;
-    // Branch by item state: pending → search candidates;
-    // confirmed-without-description → refresh detail from DLsite.
+    // confirmed item with no description → refresh detail from whichever source it has.
+    // Otherwise (pending / no_match / unsearched) → run a unified search.
     if (item.organizationStatus === "confirmed" && !item.description) {
-      void runRefresh(item.id);
+      const src = item.vndbId ? "vndb" : item.dlsiteWorkId ? "dlsite" : null;
+      if (src) void runRefresh(item.id, src);
     } else {
       const q = cleanQuery(item.fileName);
       setQuery(q);
@@ -111,6 +117,36 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
   }
 
   const handleSearch = () => runSearch(query);
+
+  const handleReset = async () => {
+    if (!confirm("Reset this item back to pending? Existing metadata link will be removed.")) return;
+    setError(null);
+    try {
+      await resetInventoryItem(item.id);
+      setCandidates([]);
+      clearPreview();
+      onMetadataConfirmed?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reset failed");
+    }
+  };
+
+  const saveTitle = async (next: string) => {
+    await editWork(item.id, { displayTitle: next });
+    onMetadataConfirmed?.();
+  };
+
+  const saveWorkTypeLabel = async (next: string) => {
+    // Pass workType as empty string too so both fields clear in sync if the
+    // user blanks the label.
+    await editWork(item.id, { workTypeLabel: next, workType: next.trim() === "" ? "" : undefined });
+    onMetadataConfirmed?.();
+  };
+
+  const savePrimaryCategory = async (next: string) => {
+    await editInventoryItem(item.id, { primaryCategory: next });
+    onMetadataConfirmed?.();
+  };
 
   const handleLink = async () => {
     const v = linkInput.trim();
@@ -153,7 +189,17 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         <div className="large-cover" />
       )}
       <div className="detail-title-row">
-        <h2>{item.displayTitle ?? item.fileName}</h2>
+        <h2>
+          {item.displayTitle ? (
+            <InlineText
+              value={item.displayTitle}
+              onSave={saveTitle}
+              placeholder="Set title"
+            />
+          ) : (
+            item.fileName
+          )}
+        </h2>
         <a
           className="icon-button"
           href={downloadUrl(item.id)}
@@ -173,15 +219,32 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         <span className={`status-pill status-${item.organizationStatus}`}>
           {item.organizationStatus}
         </span>
-        {(item.workTypeLabel || item.workType) && (
-          <span
-            className="work-type-pill"
-            title={item.workType ?? undefined}
-          >
-            {item.workTypeLabel ?? item.workType}
+        {item.displayTitle ? (
+          <span className="work-type-pill" title={item.workType ?? undefined}>
+            <InlineText
+              value={item.workTypeLabel ?? item.workType ?? ""}
+              onSave={saveWorkTypeLabel}
+              placeholder="add type"
+            />
           </span>
+        ) : (
+          (item.workTypeLabel || item.workType) && (
+            <span className="work-type-pill" title={item.workType ?? undefined}>
+              {item.workTypeLabel ?? item.workType}
+            </span>
+          )
         )}
-        <span>{item.primaryCategory ?? "Unsorted"}</span>
+        <select
+          className="primary-select"
+          value={item.primaryCategory ?? ""}
+          onChange={(e) => void savePrimaryCategory(e.target.value)}
+          title="Primary category"
+        >
+          <option value="">Unsorted</option>
+          {PRIMARY_CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         {item.fileType && <span>· {item.fileType}</span>}
         {item.fileSizeBytes != null && (
           <span>· {formatBytes(item.fileSizeBytes)}</span>
@@ -242,13 +305,49 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
         <dt>Language</dt>
         <dd>{item.language ?? "unknown"}</dd>
       </dl>
+      {(item.dlsiteWorkId || item.vndbId || item.organizationStatus !== "pending") && (
+        <div className="detail-source-actions">
+          {item.dlsiteWorkId && (
+            <button
+              type="button"
+              className="source-refresh source-refresh-dlsite"
+              onClick={() => runRefresh(item.id, "dlsite")}
+              disabled={searching}
+              title={`Refresh from DLsite (${item.dlsiteWorkId})`}
+            >
+              ↻ DLsite
+            </button>
+          )}
+          {item.vndbId && (
+            <button
+              type="button"
+              className="source-refresh source-refresh-vndb"
+              onClick={() => runRefresh(item.id, "vndb")}
+              disabled={searching}
+              title={`Refresh from VNDB (${item.vndbId})`}
+            >
+              ↻ VNDB
+            </button>
+          )}
+          {item.organizationStatus !== "pending" && (
+            <button
+              type="button"
+              className="source-reset"
+              onClick={handleReset}
+              title="Unlink metadata and reset back to pending"
+            >
+              ↺ Reset
+            </button>
+          )}
+        </div>
+      )}
       <div className="detail-search">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Search DLsite..."
+          placeholder="Search DLsite + VNDB..."
         />
         <button onClick={handleSearch} disabled={searching || !query.trim()}>
           {searching ? "..." : "Search"}
@@ -260,7 +359,7 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
           value={linkInput}
           onChange={(e) => setLinkInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleLink()}
-          placeholder="Direct link · paste DLsite URL or RJ/VJ/BJ code"
+          placeholder="Direct link · RJ/VJ/BJ code, vN code, or full URL"
         />
         <button
           onClick={handleLink}
@@ -273,53 +372,82 @@ export function DetailPanel({ item, autoSearchToken, onMetadataConfirmed }: Deta
       {error && <p className="error-message">{error}</p>}
       {candidates.length > 0 && (
         <div className="candidates">
-          <h3>Candidates</h3>
-          <ul className="candidate-list">
-            {candidates.map((c) => {
-              const coverOk = c.coverUrl && !coverErrored.has(c.id);
-              return (
-                <li key={c.id} className="candidate-item" {...hoverProps(coverOk ? c.coverUrl : null)}>
-                  {coverOk ? (
-                    <img
-                      src={c.coverUrl!}
-                      alt=""
-                      className="candidate-cover"
-                      onError={() => markErrored(c.id)}
-                    />
-                  ) : (
-                    <div className="candidate-cover candidate-cover-fallback" aria-hidden />
-                  )}
-                  <div className="candidate-info">
-                    <strong title={c.title}>{c.title}</strong>
-                    <div className="candidate-meta">
-                      <a
-                        className="candidate-link"
-                        href={c.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open on DLsite"
-                      >
-                        {c.sourceWorkId} <span aria-hidden>↗</span>
-                      </a>
-                      {c.workType && <span className="candidate-type">{c.workType}</span>}
-                      {c.circle && <span className="candidate-circle">{c.circle}</span>}
-                    </div>
-                    {c.introShort && <p className="candidate-intro">{c.introShort}</p>}
-                    <button
-                      className="candidate-confirm"
-                      onClick={() => handleConfirm(c)}
-                      disabled={confirming === c.id}
-                    >
-                      {confirming === c.id ? "…" : "Confirm"}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {groupBySource(candidates).map(([source, group]) => (
+            <section key={source} className="candidate-group">
+              <h3>
+                <span className={`candidate-source-tag candidate-source-${source}`}>
+                  {SOURCE_LABEL[source] ?? source}
+                </span>
+                <span className="candidate-group-count">· {group.length}</span>
+              </h3>
+              <ul className="candidate-list">
+                {group.map((c) => {
+                  const coverOk = c.coverUrl && !coverErrored.has(c.id);
+                  return (
+                    <li key={c.id} className="candidate-item" {...hoverProps(coverOk ? c.coverUrl : null)}>
+                      {coverOk ? (
+                        <img
+                          src={c.coverUrl!}
+                          alt=""
+                          className="candidate-cover"
+                          onError={() => markErrored(c.id)}
+                        />
+                      ) : (
+                        <div className="candidate-cover candidate-cover-fallback" aria-hidden />
+                      )}
+                      <div className="candidate-info">
+                        <strong title={c.title}>{c.title}</strong>
+                        <div className="candidate-meta">
+                          <a
+                            className="candidate-link"
+                            href={c.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={`Open on ${SOURCE_LABEL[source] ?? source}`}
+                          >
+                            {c.sourceWorkId} <span aria-hidden>↗</span>
+                          </a>
+                          {c.workType && <span className="candidate-type">{c.workType}</span>}
+                          {c.circle && <span className="candidate-circle">{c.circle}</span>}
+                        </div>
+                        {c.introShort && <p className="candidate-intro">{c.introShort}</p>}
+                        <button
+                          className="candidate-confirm"
+                          onClick={() => handleConfirm(c)}
+                          disabled={confirming === c.id}
+                        >
+                          {confirming === c.id ? "…" : "Confirm"}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
         </div>
       )}
       {preview}
     </div>
+  );
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  dlsite: "DLsite",
+  vndb: "VNDB",
+};
+const SOURCE_ORDER: Record<string, number> = { dlsite: 0, vndb: 1 };
+
+function groupBySource(
+  candidates: MetadataCandidate[],
+): [string, MetadataCandidate[]][] {
+  const map = new Map<string, MetadataCandidate[]>();
+  for (const c of candidates) {
+    const arr = map.get(c.sourceName) ?? [];
+    arr.push(c);
+    map.set(c.sourceName, arr);
+  }
+  return [...map.entries()].sort(
+    (a, b) => (SOURCE_ORDER[a[0]] ?? 99) - (SOURCE_ORDER[b[0]] ?? 99),
   );
 }

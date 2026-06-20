@@ -70,11 +70,51 @@ export async function linkInventoryItem(
   }
 }
 
-export async function refreshMetadata(itemId: string): Promise<void> {
-  const r = await fetch(`${API_BASE}/api/metadata/refresh`, {
+export async function resetInventoryItem(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Reset failed: ${r.status}`);
+}
+
+export async function editWork(
+  itemId: string,
+  fields: {
+    displayTitle?: string;
+    workType?: string;
+    workTypeLabel?: string;
+  },
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/edit-work`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId, ...fields }),
+  });
+  if (!r.ok) throw new Error(`Edit failed: ${r.status}`);
+}
+
+export async function editInventoryItem(
+  itemId: string,
+  fields: { primaryCategory?: string },
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/edit-item`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId, ...fields }),
+  });
+  if (!r.ok) throw new Error(`Edit failed: ${r.status}`);
+}
+
+export async function refreshMetadata(
+  itemId: string,
+  source: "dlsite" | "vndb",
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId, source }),
   });
   if (!r.ok) throw new Error(`Refresh failed: ${r.status}`);
 }

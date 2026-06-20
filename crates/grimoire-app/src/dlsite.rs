@@ -1,4 +1,4 @@
-use crate::metadata_source::MetadataSource;
+use crate::metadata_source::{MetadataSource, ProductDetail};
 use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
 use regex::Regex;
@@ -8,26 +8,6 @@ use std::sync::LazyLock;
 use uuid::Uuid;
 
 const DLSITE_IMG_BASE: &str = "https://img.dlsite.jp/";
-
-#[derive(Debug, Clone, Default)]
-pub struct ProductDetail {
-    pub work_name: Option<String>,
-    pub maker_name: Option<String>,
-    pub description: Option<String>,
-    pub release_date: Option<NaiveDate>,
-    pub series: Option<String>,
-    pub tags: Vec<String>,
-    pub cover_image_url: Option<String>,
-    pub preview_image_urls: Vec<String>,
-    pub file_type: Option<String>,
-    pub file_size_bytes: Option<i64>,
-    pub dl_count: Option<i32>,
-    pub rate_average: Option<f32>,
-    pub rate_count: Option<i32>,
-    pub price_jpy: Option<i32>,
-    pub work_type: Option<String>,
-    pub work_type_label: Option<String>,
-}
 
 static RJ_CODE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(RJ|VJ|BJ)\d{6,8}").unwrap());

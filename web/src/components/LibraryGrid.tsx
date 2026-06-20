@@ -21,7 +21,7 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
           {item.coverImageUrl ? (
             <div className="cover cover-image">
               <img src={item.coverImageUrl} alt="" loading="lazy" />
-              <span>{item.organizationStatus}</span>
+              <span className="cover-status">{item.organizationStatus}</span>
               {(item.workTypeLabel || item.workType) && (
                 <span className="work-type-badge" title={item.workType ?? undefined}>
                   {item.workTypeLabel ?? item.workType}
@@ -30,7 +30,7 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
             </div>
           ) : (
             <div className={`cover cover-${index % 6}`}>
-              <span>{item.organizationStatus}</span>
+              <span className="cover-status">{item.organizationStatus}</span>
               {(item.workTypeLabel || item.workType) && (
                 <span className="work-type-badge" title={item.workType ?? undefined}>
                   {item.workTypeLabel ?? item.workType}
