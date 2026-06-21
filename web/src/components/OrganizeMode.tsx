@@ -8,15 +8,17 @@ interface OrganizeModeProps {
   autoSearchToken: number;
   onAutoTrigger: () => void;
   onSkip: (item: InventoryItem) => void;
+  onExclude: (item: InventoryItem) => void;
   onMetadataConfirmed: () => void;
   onExit: () => void;
 }
 
-type Filter = "pending" | "needs-detail" | "no-dlsite";
+type Filter = "pending" | "needs-detail" | "skipped" | "excluded";
 const ALL_FILTERS: { id: Filter; label: string; desc: string }[] = [
   { id: "pending", label: "Pending", desc: "no source match yet" },
-  { id: "needs-detail", label: "Confirmed · missing detail", desc: "never enriched" },
-  { id: "no-dlsite", label: "No DLsite match", desc: "skipped before — try VNDB" },
+  { id: "needs-detail", label: "Missing detail", desc: "confirmed but never enriched" },
+  { id: "skipped", label: "Skipped", desc: "no_match — couldn't be found on a source" },
+  { id: "excluded", label: "Excluded", desc: "ignored — marked not-a-game" },
 ];
 
 function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
@@ -28,7 +30,8 @@ function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
   ) {
     return true;
   }
-  if (filters.has("no-dlsite") && item.organizationStatus === "no_match") return true;
+  if (filters.has("skipped") && item.organizationStatus === "no_match") return true;
+  if (filters.has("excluded") && item.organizationStatus === "ignored") return true;
   return false;
 }
 
@@ -45,6 +48,7 @@ export function OrganizeMode({
   autoSearchToken,
   onAutoTrigger,
   onSkip,
+  onExclude,
   onMetadataConfirmed,
   onExit,
 }: OrganizeModeProps) {
@@ -96,6 +100,11 @@ export function OrganizeMode({
     onSkip(current);
     goNext();
   };
+  const excludeCurrent = () => {
+    if (!current) return;
+    onExclude(current);
+    goNext();
+  };
 
   // Keyboard nav. Skip when focus is in an editable field so the user can type
   // RJ codes / titles without the queue scrolling under them.
@@ -121,6 +130,9 @@ export function OrganizeMode({
       } else if (e.key === "s" || e.key === "S") {
         e.preventDefault();
         skipCurrent();
+      } else if (e.key === "x" || e.key === "X") {
+        e.preventDefault();
+        excludeCurrent();
       }
     };
     window.addEventListener("keydown", handler);
@@ -183,9 +195,17 @@ export function OrganizeMode({
             onClick={skipCurrent}
             disabled={!current}
             className="organize-skip"
-            title="S · Skip · mark as no DLsite match"
+            title="S · Skip · couldn't find on a source (try later)"
           >
             Skip (S)
+          </button>
+          <button
+            onClick={excludeCurrent}
+            disabled={!current}
+            className="organize-exclude"
+            title="X · Exclude · not-a-game (compilation / junk)"
+          >
+            Exclude (X)
           </button>
           <button
             onClick={goNext}

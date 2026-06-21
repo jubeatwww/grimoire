@@ -14,6 +14,7 @@ pub fn router() -> Router<AppState> {
         .route("/search", post(search))
         .route("/confirm", post(confirm))
         .route("/skip", post(skip))
+        .route("/exclude", post(exclude))
         .route("/refresh", post(refresh))
         .route("/link", post(link))
         .route("/reset", post(reset))
@@ -239,6 +240,25 @@ async fn skip(
     sqlx::query(
         "UPDATE inventory_items
             SET organization_status = 'no_match', updated_at = now()
+          WHERE id = $1",
+    )
+    .bind(body.inventory_item_id)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Exclude is the "this isn't a game / compilation / junk — never process it"
+/// marker. Distinct from Skip (`no_match`) which means "source didn't have it,
+/// try again later (e.g. via VNDB)".
+async fn exclude(
+    State(state): State<AppState>,
+    Json(body): Json<ItemIdRequest>,
+) -> Result<StatusCode, StatusCode> {
+    sqlx::query(
+        "UPDATE inventory_items
+            SET organization_status = 'ignored', updated_at = now()
           WHERE id = $1",
     )
     .bind(body.inventory_item_id)

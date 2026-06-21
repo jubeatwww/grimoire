@@ -54,6 +54,15 @@ export async function skipInventoryItem(itemId: string): Promise<void> {
   if (!r.ok) throw new Error(`Skip failed: ${r.status}`);
 }
 
+export async function excludeInventoryItem(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/exclude`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Exclude failed: ${r.status}`);
+}
+
 export async function linkInventoryItem(
   itemId: string,
   worknoOrUrl: string,

@@ -637,6 +637,22 @@ button.chip.chip-on .chip-count {
   border-color: #dc2626;
   color: #991b1b;
 }
+.source-exclude {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--source-vndb);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--source-vndb);
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.source-exclude:hover {
+  background: rgba(109, 40, 217, .12);
+  border-color: var(--source-vndb);
+}
 
 .inline-edit {
   cursor: text;
@@ -1109,6 +1125,11 @@ button.chip.chip-on .chip-count {
   color: var(--source-vndb) !important;
 }
 .organize-skip:hover:not(:disabled) { background: #f3e8ff !important; }
+.organize-exclude {
+  border-color: var(--error-border) !important;
+  color: var(--error) !important;
+}
+.organize-exclude:hover:not(:disabled) { background: var(--error-bg) !important; }
 .organize-next {
   background: var(--accent) !important;
   border-color: var(--accent) !important;
@@ -1391,6 +1412,7 @@ button.chip.chip-on .chip-count {
   padding: 5px 10px;
   font-size: 12px;
 }
+.filter-toggle { margin-left: auto; }
 
 /* --- Browse view --------------------------------------------------------- */
 

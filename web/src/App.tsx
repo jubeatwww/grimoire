@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchLibrary, skipInventoryItem, triggerScan } from "./api/client";
+import {
+  excludeInventoryItem,
+  fetchLibrary,
+  skipInventoryItem,
+  triggerScan,
+} from "./api/client";
 import type { InventoryItem } from "./api/types";
 import { AppShell } from "./components/AppShell";
 import { BrowseMode } from "./components/BrowseMode";
@@ -32,13 +37,21 @@ export const PRIMARY_CATEGORIES = [
 ];
 
 const QUICK_FILTER_LABELS: Record<string, string> = {
-  "needs-review": "Needs review",
+  pending: "Pending",
   "has-dlsite": "Has DLsite",
+  "has-vndb": "Has VNDB",
+  "no-match": "Skipped",
+  excluded: "Excluded",
+  "missing-detail": "Missing detail",
   "missing-cover": "Missing cover",
 };
 const QUICK_FILTER_OPTIONS: FilterOption[] = [
-  { id: "needs-review", count: 0 },
+  { id: "pending", count: 0 },
   { id: "has-dlsite", count: 0 },
+  { id: "has-vndb", count: 0 },
+  { id: "no-match", count: 0 },
+  { id: "excluded", count: 0 },
+  { id: "missing-detail", count: 0 },
   { id: "missing-cover", count: 0 },
 ];
 
@@ -50,6 +63,25 @@ function emptyFilters(): Filters {
     legacy: new Set(),
     tags: new Set(),
   };
+}
+
+function matchesSearch(item: InventoryItem, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const haystacks: (string | null | undefined)[] = [
+    item.displayTitle,
+    item.fileName,
+    item.circle,
+    item.dlsiteWorkId,
+    item.vndbId,
+  ];
+  for (const h of haystacks) {
+    if (h && h.toLowerCase().includes(q)) return true;
+  }
+  for (const t of item.sourceTags ?? []) {
+    if (t.toLowerCase().includes(q)) return true;
+  }
+  return false;
 }
 
 function matches(item: InventoryItem, f: Filters): boolean {
@@ -70,8 +102,17 @@ function matches(item: InventoryItem, f: Filters): boolean {
     if (!any) return false;
   }
   for (const q of f.quick) {
-    if (q === "needs-review" && item.organizationStatus !== "pending") return false;
-    if (q === "has-dlsite" && !item.displayTitle) return false;
+    if (q === "pending" && item.organizationStatus !== "pending") return false;
+    if (q === "has-dlsite" && !item.dlsiteWorkId) return false;
+    if (q === "has-vndb" && !item.vndbId) return false;
+    if (q === "no-match" && item.organizationStatus !== "no_match") return false;
+    if (q === "excluded" && item.organizationStatus !== "ignored") return false;
+    if (
+      q === "missing-detail" &&
+      !(item.organizationStatus === "confirmed" && !item.enrichedAt)
+    ) {
+      return false;
+    }
     if (q === "missing-cover" && item.coverImageUrl) return false;
   }
   return true;
@@ -112,15 +153,30 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [search, setSearch] = useState("");
+  const [showExcluded, setShowExcluded] = useState(false);
   const [autoSearchToken, setAutoSearchToken] = useState(0);
 
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["library"], queryFn: fetchLibrary, retry: false });
   const items = query.data?.items ?? [];
 
+  const searchQuery = search.trim().toLowerCase();
   const filteredItems = useMemo(
-    () => items.filter((i) => matches(i, filters)),
-    [items, filters],
+    () =>
+      items.filter((i) => {
+        // Hide excluded items unless the user explicitly toggled them on OR
+        // is filtering FOR excluded via the Quick filter chip.
+        if (
+          i.organizationStatus === "ignored" &&
+          !showExcluded &&
+          !filters.quick.has("excluded")
+        ) {
+          return false;
+        }
+        return matches(i, filters) && matchesSearch(i, searchQuery);
+      }),
+    [items, filters, searchQuery, showExcluded],
   );
 
   const primaryOpts = useMemo(() => countByValue(items, (i) => i.primaryCategory), [items]);
@@ -176,6 +232,15 @@ export function App() {
     }
   };
 
+  const handleExcludeItem = async (item: InventoryItem) => {
+    try {
+      await excludeInventoryItem(item.id);
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+    } catch (e) {
+      console.error("exclude failed", e);
+    }
+  };
+
   const pendingCount = items.filter((i) => i.organizationStatus === "pending").length;
   const organizeCount = items.filter(
     (i) =>
@@ -205,6 +270,7 @@ export function App() {
           autoSearchToken={autoSearchToken}
           onAutoTrigger={() => setAutoSearchToken((t) => t + 1)}
           onSkip={handleSkipItem}
+          onExclude={handleExcludeItem}
           onMetadataConfirmed={handleMetadataConfirmed}
           onExit={() => setViewMode("cover")}
         />
@@ -212,22 +278,17 @@ export function App() {
         <>
           <header className="topbar">
             <div className="brand">HG</div>
-            <nav className="topbar-nav">
-              <button className="active">作品庫</button>
-              <button>匯入 staging</button>
-              <button>下載紀錄</button>
-              <button>設定</button>
-            </nav>
             <input
               type="search"
               className="topbar-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               aria-label="Search title, filename, circle, tag, DLsite id"
-              placeholder="Search title, filename, circle, tag, or DLsite ID"
+              placeholder="Search title, filename, circle, tag, or DLsite/VNDB ID"
             />
             <button onClick={handleScan} disabled={scanning}>
               {scanning ? "Scanning..." : "Scan"}
             </button>
-            <button className="primary">Import</button>
             <ThemeToggle />
           </header>
           <div className="filters-bar">
@@ -296,6 +357,18 @@ export function App() {
               labels={QUICK_FILTER_LABELS}
               hideCounts
             />
+            <button
+              type="button"
+              className={`filter-trigger filter-toggle ${showExcluded ? "active" : ""}`}
+              onClick={() => setShowExcluded((v) => !v)}
+              title={
+                showExcluded
+                  ? "Hide excluded (not-a-game) items"
+                  : "Show excluded (not-a-game) items"
+              }
+            >
+              <span>{showExcluded ? "● Excluded shown" : "○ Excluded hidden"}</span>
+            </button>
           </div>
           {viewMode === "cover" && (
             <LibraryGrid

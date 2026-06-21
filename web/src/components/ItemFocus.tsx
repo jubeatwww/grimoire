@@ -4,6 +4,7 @@ import {
   downloadUrl,
   editInventoryItem,
   editWork,
+  excludeInventoryItem,
   refreshMetadata,
   resetInventoryItem,
 } from "../api/client";
@@ -54,6 +55,22 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
       onChanged?.();
     } catch (e) {
       console.error("reset failed", e);
+    }
+  };
+
+  const handleExclude = async () => {
+    if (
+      !confirm(
+        "Exclude this item? It will be marked as not-a-game and stay out of the Organize queue. Reset to bring it back.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await excludeInventoryItem(item.id);
+      onChanged?.();
+    } catch (e) {
+      console.error("exclude failed", e);
     }
   };
 
@@ -200,8 +217,7 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
         <dt>Language</dt>
         <dd>{item.language ?? "unknown"}</dd>
       </dl>
-      {(item.dlsiteWorkId || item.vndbId || item.organizationStatus !== "pending") && (
-        <div className="detail-source-actions">
+      <div className="detail-source-actions">
           {item.dlsiteWorkId && (
             <button
               type="button"
@@ -232,8 +248,17 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
               ↺ Reset
             </button>
           )}
+          {item.organizationStatus !== "ignored" && (
+            <button
+              type="button"
+              className="source-exclude"
+              onClick={handleExclude}
+              title="Mark as not-a-game (compilation / junk / utility) — hidden from Organize"
+            >
+              ✕ Exclude
+            </button>
+          )}
         </div>
-      )}
       {preview}
     </div>
   );
