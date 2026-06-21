@@ -1,7 +1,9 @@
 import { PRIMARY_CATEGORIES } from "../App";
+import { useEffect, useRef, useState } from "react";
 import {
   createManualEntry,
   deleteInventoryItem,
+  deleteItemAndFile,
   downloadUrl,
   editInventoryItem,
   editWork,
@@ -10,6 +12,7 @@ import {
   resetInventoryItem,
 } from "../api/client";
 import type { InventoryItem } from "../api/types";
+import { useConfirm } from "./ConfirmDialog";
 import { CoverEditor } from "./CoverEditor";
 import { InlineText } from "./InlineText";
 import { SamplesEditor } from "./SamplesEditor";
@@ -35,6 +38,21 @@ function formatBytes(n: number): string {
 }
 
 export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
+  const confirm = useConfirm();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
   const handleRefresh = async (source: "dlsite" | "vndb" | "steam") => {
     try {
       await refreshMetadata(item.id, source);
@@ -45,7 +63,13 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   };
 
   const handleReset = async () => {
-    if (!confirm("Reset this item back to pending? Existing metadata link will be removed.")) return;
+    const ok = await confirm({
+      title: "Reset this item?",
+      message:
+        "It will go back to pending. The metadata link is removed; the file is untouched.",
+      confirmLabel: "Reset",
+    });
+    if (!ok) return;
     try {
       await resetInventoryItem(item.id);
       onChanged?.();
@@ -64,13 +88,13 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   };
 
   const handleExclude = async () => {
-    if (
-      !confirm(
-        "Exclude this item? It will be marked as not-a-game and stay out of the Organize queue. Reset to bring it back.",
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: "Exclude this item?",
+      message:
+        "Marked as not-a-game (compilation / junk / utility) and hidden from Organize. Reset brings it back.",
+      confirmLabel: "Exclude",
+    });
+    if (!ok) return;
     try {
       await excludeInventoryItem(item.id);
       onChanged?.();
@@ -79,19 +103,54 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
     }
   };
 
-  const handleDelete = async () => {
-    if (
-      !confirm(
-        "Permanently delete this inventory record? The file itself is left untouched (or already gone). The linked game_work is kept in case other items reference it.",
-      )
-    ) {
-      return;
-    }
+  const handleDeleteRecord = async () => {
+    setMenuOpen(false);
+    const ok = await confirm({
+      title: "Delete this inventory record?",
+      message: (
+        <>
+          The file itself is left untouched on disk (or already gone). The linked
+          game_work is kept so other items that share it stay intact.
+        </>
+      ),
+      confirmLabel: "Delete record",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteInventoryItem(item.id);
       onChanged?.();
     } catch (e) {
       console.error("delete failed", e);
+    }
+  };
+
+  const handleDeleteWithFile = async () => {
+    setMenuOpen(false);
+    const ok = await confirm({
+      title: "Delete file and record?",
+      message: (
+        <>
+          <p style={{ margin: "0 0 6px" }}>
+            <strong>{item.fileName}</strong>
+          </p>
+          <p style={{ margin: 0 }}>
+            The file under the library root will be <em>permanently removed
+            from disk</em>, then this inventory record is dropped. The linked
+            game_work is kept. Use this to clean up duplicates — it can't be
+            undone from the app.
+          </p>
+        </>
+      ),
+      confirmLabel: "Delete file + record",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteItemAndFile(item.id);
+      onChanged?.();
+    } catch (e) {
+      console.error("delete file failed", e);
     }
   };
 
@@ -320,16 +379,38 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
               ✕ Exclude
             </button>
           )}
-          {item.missing && (
+          <div ref={menuRef} className="action-menu">
             <button
               type="button"
-              className="source-delete"
-              onClick={handleDelete}
-              title="Permanently delete this inventory record (file is gone)"
+              className="action-menu-trigger"
+              onClick={() => setMenuOpen((v) => !v)}
+              title="More actions"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
             >
-              🗑 Delete record
+              ⋯
             </button>
-          )}
+            {menuOpen && (
+              <div className="action-menu-popover" role="menu">
+                <button
+                  type="button"
+                  className="action-menu-item"
+                  onClick={handleDeleteRecord}
+                >
+                  <span>🗑 Delete record only</span>
+                  <small>keep file on disk</small>
+                </button>
+                <button
+                  type="button"
+                  className="action-menu-item action-menu-danger"
+                  onClick={handleDeleteWithFile}
+                >
+                  <span>💣 Delete file + record</span>
+                  <small>removes the file from {item.legacyLocation ?? "library"}/…</small>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
     </div>
   );

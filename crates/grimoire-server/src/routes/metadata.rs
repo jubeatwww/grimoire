@@ -24,6 +24,7 @@ pub fn router() -> Router<AppState> {
         .route("/manual", post(manual))
         .route("/delete-item", post(delete_item))
         .route("/delete-missing", post(delete_missing))
+        .route("/delete-item-and-file", post(delete_item_and_file))
 }
 
 // ---- source dispatch ------------------------------------------------------
@@ -415,6 +416,56 @@ async fn delete_missing(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(DeleteMissingResponse {
         deleted: result.rows_affected(),
+    }))
+}
+
+/// Delete the file under library_root AND the inventory_item row. Intended
+/// for cleaning up duplicates — destructive on the filesystem, so the UI
+/// gates this behind an extra-click menu + confirmation dialog. The linked
+/// game_work is left in place.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteWithFileResponse {
+    file_deleted: bool,
+    file_missing: bool,
+}
+
+async fn delete_item_and_file(
+    State(state): State<AppState>,
+    Json(body): Json<ItemIdRequest>,
+) -> Result<Json<DeleteWithFileResponse>, StatusCode> {
+    let row = sqlx::query("SELECT path FROM inventory_items WHERE id = $1")
+        .bind(body.inventory_item_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let Some(row) = row else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+    let rel_path: String = row.get("path");
+
+    let full_path = state
+        .library_root
+        .resolve_relative(&rel_path)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let mut file_deleted = false;
+    let mut file_missing = false;
+    match tokio::fs::remove_file(&full_path).await {
+        Ok(()) => file_deleted = true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => file_missing = true,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+
+    sqlx::query("DELETE FROM inventory_items WHERE id = $1")
+        .bind(body.inventory_item_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(DeleteWithFileResponse {
+        file_deleted,
+        file_missing,
     }))
 }
 

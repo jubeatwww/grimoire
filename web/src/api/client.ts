@@ -121,6 +121,23 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
   if (!r.ok) throw new Error(`Delete failed: ${r.status}`);
 }
 
+export interface DeleteWithFileResult {
+  fileDeleted: boolean;
+  fileMissing: boolean;
+}
+
+export async function deleteItemAndFile(
+  itemId: string,
+): Promise<DeleteWithFileResult> {
+  const r = await fetch(`${API_BASE}/api/metadata/delete-item-and-file`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Delete failed: ${r.status}`);
+  return r.json();
+}
+
 export async function deleteAllMissing(): Promise<number> {
   const r = await fetch(`${API_BASE}/api/metadata/delete-missing`, {
     method: "POST",

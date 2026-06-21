@@ -10,6 +10,7 @@ import {
 import type { InventoryItem } from "./api/types";
 import { AppShell } from "./components/AppShell";
 import { BrowseMode } from "./components/BrowseMode";
+import { useConfirm } from "./components/ConfirmDialog";
 import { DetailPanel } from "./components/DetailPanel";
 import { FilterDropdown } from "./components/FilterDropdown";
 import { LibraryGrid } from "./components/LibraryGrid";
@@ -179,6 +180,7 @@ export function App() {
   const [autoSearchToken, setAutoSearchToken] = useState(0);
 
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const query = useQuery({ queryKey: ["library"], queryFn: fetchLibrary, retry: false });
   const items = query.data?.items ?? [];
 
@@ -264,13 +266,14 @@ export function App() {
 
   const missingCount = items.filter((i) => i.missing).length;
   const handleDeleteMissing = async () => {
-    if (
-      !confirm(
-        `Permanently delete ${missingCount} inventory record${missingCount === 1 ? "" : "s"} flagged missing? The linked game_works are kept.`,
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete ${missingCount} missing record${missingCount === 1 ? "" : "s"}?`,
+      message:
+        "Every inventory row flagged missing gets dropped. Files are already gone from disk; the linked game_works are kept in case other items use them.",
+      confirmLabel: `Delete ${missingCount}`,
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await deleteAllMissing();
       queryClient.invalidateQueries({ queryKey: ["library"] });
