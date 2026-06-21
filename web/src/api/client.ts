@@ -112,6 +112,24 @@ export async function editWork(
   if (!r.ok) throw new Error(`Edit failed: ${r.status}`);
 }
 
+export async function deleteInventoryItem(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/delete-item`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Delete failed: ${r.status}`);
+}
+
+export async function deleteAllMissing(): Promise<number> {
+  const r = await fetch(`${API_BASE}/api/metadata/delete-missing`, {
+    method: "POST",
+  });
+  if (!r.ok) throw new Error(`Delete-missing failed: ${r.status}`);
+  const data: { deleted: number } = await r.json();
+  return data.deleted;
+}
+
 export async function createManualEntry(itemId: string): Promise<void> {
   const r = await fetch(`${API_BASE}/api/metadata/manual`, {
     method: "POST",

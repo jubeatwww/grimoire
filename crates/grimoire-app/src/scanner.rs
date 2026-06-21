@@ -21,11 +21,36 @@ pub async fn scan_library(options: ScanOptions) -> anyhow::Result<ScanResult> {
     task::spawn_blocking(move || scan_library_blocking(options)).await?
 }
 
+/// Names we never recurse into. Synology drops deleted files into `#recycle`
+/// and indexes thumbnails into `@eaDir`; OS metadata files (`.DS_Store`,
+/// `Thumbs.db`) and the Windows recycle bin add noise as well. Skipping these
+/// at the directory level keeps scan output focused on the actual library
+/// and stops "I deleted a file" from showing up as a new ghost entry.
+const SKIPPED_DIR_NAMES: &[&str] = &[
+    "#recycle",
+    "@eaDir",
+    ".DS_Store",
+    "Thumbs.db",
+    "$RECYCLE.BIN",
+    ".Trash",
+    ".Trashes",
+    ".AppleDouble",
+];
+
+fn is_skipped(entry: &walkdir::DirEntry) -> bool {
+    let name = entry.file_name().to_string_lossy();
+    SKIPPED_DIR_NAMES.iter().any(|skip| name.eq_ignore_ascii_case(skip))
+}
+
 fn scan_library_blocking(options: ScanOptions) -> anyhow::Result<ScanResult> {
     let mut items = Vec::new();
     let mut warnings = Vec::new();
 
-    for entry in WalkDir::new(&options.root).min_depth(1) {
+    for entry in WalkDir::new(&options.root)
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|e| !is_skipped(e))
+    {
         let entry = match entry {
             Ok(entry) => entry,
             Err(err) => {

@@ -1,7 +1,7 @@
-import { useEffect } from "react";
 import { PRIMARY_CATEGORIES } from "../App";
 import {
   createManualEntry,
+  deleteInventoryItem,
   downloadUrl,
   editInventoryItem,
   editWork,
@@ -12,7 +12,7 @@ import {
 import type { InventoryItem } from "../api/types";
 import { CoverEditor } from "./CoverEditor";
 import { InlineText } from "./InlineText";
-import { useImagePreview } from "./useImagePreview";
+import { SamplesEditor } from "./SamplesEditor";
 
 interface ItemFocusProps {
   item: InventoryItem;
@@ -35,12 +35,6 @@ function formatBytes(n: number): string {
 }
 
 export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
-  const { hoverProps, preview, clear: clearPreview } = useImagePreview();
-
-  // Drop any pending hover preview when the focused item changes — the anchor
-  // image unmounts so mouseleave never fires on its own.
-  useEffect(() => clearPreview(), [item.id, clearPreview]);
-
   const handleRefresh = async (source: "dlsite" | "vndb" | "steam") => {
     try {
       await refreshMetadata(item.id, source);
@@ -85,6 +79,22 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (
+      !confirm(
+        "Permanently delete this inventory record? The file itself is left untouched (or already gone). The linked game_work is kept in case other items reference it.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteInventoryItem(item.id);
+      onChanged?.();
+    } catch (e) {
+      console.error("delete failed", e);
+    }
+  };
+
   const saveTitle = async (next: string) => {
     await editWork(item.id, { displayTitle: next });
     onChanged?.();
@@ -104,9 +114,19 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   };
 
   const hasGameWork = item.displayTitle != null;
+  const isManualEntry =
+    item.organizationStatus === "confirmed" &&
+    !item.dlsiteWorkId &&
+    !item.vndbId &&
+    !item.steamAppId;
 
   return (
     <div className="item-focus">
+      {item.missing && (
+        <div className="item-missing-banner">
+          ⚠ File missing — the scanner couldn't find this path anymore.
+        </div>
+      )}
       {!hideMedia &&
         (hasGameWork ? (
           <CoverEditor
@@ -166,6 +186,11 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
         <span className={`status-pill status-${item.organizationStatus}`}>
           {item.organizationStatus}
         </span>
+        {isManualEntry && (
+          <span className="manual-pill" title="No source linked — entered manually">
+            manual
+          </span>
+        )}
         {item.displayTitle ? (
           <span className="work-type-pill" title={item.workType ?? undefined}>
             <InlineText
@@ -217,21 +242,12 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
       {item.description && (
         <p className="detail-description">{item.description}</p>
       )}
-      {!hideMedia && item.previewImageUrls && item.previewImageUrls.length > 0 && (
-        <div className="detail-previews">
-          {item.previewImageUrls.map((url) => (
-            <a
-              key={url}
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="detail-preview"
-              {...hoverProps(url)}
-            >
-              <img src={url} alt="" loading="lazy" />
-            </a>
-          ))}
-        </div>
+      {!hideMedia && hasGameWork && (
+        <SamplesEditor
+          itemId={item.id}
+          current={item.previewImageUrls ?? []}
+          onChanged={() => onChanged?.()}
+        />
       )}
       <dl>
         {item.releaseDate && (
@@ -304,8 +320,17 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
               ✕ Exclude
             </button>
           )}
+          {item.missing && (
+            <button
+              type="button"
+              className="source-delete"
+              onClick={handleDelete}
+              title="Permanently delete this inventory record (file is gone)"
+            >
+              🗑 Delete record
+            </button>
+          )}
         </div>
-      {preview}
     </div>
   );
 }

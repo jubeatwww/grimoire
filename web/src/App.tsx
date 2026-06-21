@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  deleteAllMissing,
   excludeInventoryItem,
   fetchLibrary,
   skipInventoryItem,
@@ -43,6 +44,8 @@ const QUICK_FILTER_LABELS: Record<string, string> = {
   "has-steam": "Has Steam",
   "no-match": "Skipped",
   excluded: "Excluded",
+  manual: "Manual entry",
+  missing: "Missing file",
   "missing-detail": "Missing detail",
   "missing-cover": "Missing cover",
 };
@@ -53,6 +56,8 @@ const QUICK_FILTER_OPTIONS: FilterOption[] = [
   { id: "has-steam", count: 0 },
   { id: "no-match", count: 0 },
   { id: "excluded", count: 0 },
+  { id: "manual", count: 0 },
+  { id: "missing", count: 0 },
   { id: "missing-detail", count: 0 },
   { id: "missing-cover", count: 0 },
 ];
@@ -111,6 +116,18 @@ function matches(item: InventoryItem, f: Filters): boolean {
     if (q === "has-steam" && !item.steamAppId) return false;
     if (q === "no-match" && item.organizationStatus !== "no_match") return false;
     if (q === "excluded" && item.organizationStatus !== "ignored") return false;
+    if (
+      q === "manual" &&
+      !(
+        item.organizationStatus === "confirmed" &&
+        !item.dlsiteWorkId &&
+        !item.vndbId &&
+        !item.steamAppId
+      )
+    ) {
+      return false;
+    }
+    if (q === "missing" && !item.missing) return false;
     if (
       q === "missing-detail" &&
       !(item.organizationStatus === "confirmed" && !item.enrichedAt)
@@ -245,11 +262,30 @@ export function App() {
     }
   };
 
+  const missingCount = items.filter((i) => i.missing).length;
+  const handleDeleteMissing = async () => {
+    if (
+      !confirm(
+        `Permanently delete ${missingCount} inventory record${missingCount === 1 ? "" : "s"} flagged missing? The linked game_works are kept.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteAllMissing();
+      queryClient.invalidateQueries({ queryKey: ["library"] });
+    } catch (e) {
+      console.error("delete-missing failed", e);
+    }
+  };
+
   const pendingCount = items.filter((i) => i.organizationStatus === "pending").length;
+  // Mirrors OrganizeMode's default chip set (pending + needs-detail).
+  // Excluded / ignored items intentionally do not bump the badge.
   const organizeCount = items.filter(
     (i) =>
       i.organizationStatus === "pending" ||
-      (i.organizationStatus === "confirmed" && !i.description),
+      (i.organizationStatus === "confirmed" && !i.enrichedAt),
   ).length;
 
   const isOrganize = viewMode === "organize";
@@ -373,6 +409,16 @@ export function App() {
             >
               <span>{showExcluded ? "● Excluded shown" : "○ Excluded hidden"}</span>
             </button>
+            {missingCount > 0 && (
+              <button
+                type="button"
+                className="filter-trigger filter-delete-missing"
+                onClick={handleDeleteMissing}
+                title="Permanently delete every inventory record whose file is gone"
+              >
+                🗑 Delete {missingCount} missing
+              </button>
+            )}
           </div>
           {viewMode === "cover" && (
             <LibraryGrid

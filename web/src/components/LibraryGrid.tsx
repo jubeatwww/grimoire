@@ -13,7 +13,7 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
     <div className="library-grid">
       {items.map((item, index) => (
         <button
-          className={`game-card ${selectedId === item.id ? "selected" : ""}`}
+          className={`game-card ${selectedId === item.id ? "selected" : ""} ${item.missing ? "missing" : ""}`}
           key={item.id}
           onClick={() => onSelect(item)}
           {...hoverProps(item.coverImageUrl)}

@@ -6,12 +6,15 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub(crate) struct ScanResponse {
     scanned: usize,
+    marked_missing: u64,
     warnings: Vec<String>,
 }
 
+const SOURCE_ID: &str = "local";
+
 pub(crate) async fn scan(State(state): State<AppState>) -> Result<Json<ScanResponse>, StatusCode> {
     let options = ScanOptions {
-        source_id: "local".to_string(),
+        source_id: SOURCE_ID.to_string(),
         root: state.library_root.root().to_path_buf(),
     };
 
@@ -55,6 +58,7 @@ pub(crate) async fn scan(State(state): State<AppState>) -> Result<Json<ScanRespo
                 kind = EXCLUDED.kind,
                 file_size = EXCLUDED.file_size,
                 modified_at = EXCLUDED.modified_at,
+                missing = false,
                 updated_at = now()",
         )
         .bind(item.id)
@@ -83,6 +87,30 @@ pub(crate) async fn scan(State(state): State<AppState>) -> Result<Json<ScanRespo
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
+    // Mark anything that was previously visible under this source but didn't
+    // show up in this scan as `missing`. Reappearing paths get reset to false
+    // by the ON CONFLICT clause above.
+    let paths: Vec<String> = items
+        .iter()
+        .map(|i| i.path.to_string_lossy().into_owned())
+        .collect();
+    let marked = sqlx::query(
+        "UPDATE inventory_items
+            SET missing = true, updated_at = now()
+          WHERE source_id = $1
+            AND missing = false
+            AND NOT (path = ANY($2::text[]))",
+    )
+    .bind(SOURCE_ID)
+    .bind(&paths)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let scanned = items.len();
-    Ok(Json(ScanResponse { scanned, warnings }))
+    Ok(Json(ScanResponse {
+        scanned,
+        marked_missing: marked.rows_affected(),
+        warnings,
+    }))
 }

@@ -414,6 +414,33 @@ button.chip.chip-on .chip-count {
   box-shadow: 0 4px 14px rgba(15, 23, 42, .08);
 }
 .game-card.selected { box-shadow: 0 0 0 3px rgba(15, 118, 110, .18); border-color: var(--accent); }
+.game-card.missing {
+  opacity: .5;
+  border-color: var(--error-border);
+  position: relative;
+}
+.game-card.missing::after {
+  content: "⚠ missing";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+.filter-delete-missing {
+  margin-left: 6px;
+  color: var(--error) !important;
+  border-color: var(--error-border) !important;
+}
+.filter-delete-missing:hover {
+  background: var(--error-bg) !important;
+}
 .hover-preview {
   position: fixed;
   z-index: 1000;
@@ -641,6 +668,41 @@ button.chip.chip-on .chip-count {
   background: var(--error-bg);
   border-color: #dc2626;
   color: #991b1b;
+}
+.source-delete {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  background: var(--error);
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.source-delete:hover { background: #991b1b; border-color: #991b1b; }
+
+.item-missing-banner {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 12px;
+  font-weight: 600;
+}
+.manual-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-muted-strong);
+  color: var(--text-strong);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
 }
 .source-exclude {
   height: 28px;
@@ -1533,6 +1595,58 @@ button.chip.chip-on .chip-count {
   margin: 0;
   font-size: 11px;
   color: var(--error);
+}
+
+.samples-editor { position: relative; }
+.samples-edit-popover {
+  top: auto;
+  right: 0;
+  margin-top: 8px;
+  position: absolute;
+}
+.sample-tile {
+  position: relative;
+}
+.sample-tile .detail-preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.sample-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, .7);
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, background .12s;
+}
+.sample-tile:hover .sample-remove,
+.sample-remove:focus { opacity: 1; }
+.sample-remove:hover { background: var(--error); }
+.sample-add {
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--border-hover);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.sample-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft-bg);
 }
 
 .item-focus-manual {

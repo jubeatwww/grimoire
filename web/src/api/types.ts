@@ -19,6 +19,7 @@ export interface InventoryItem {
   version: string | null;
   language: string | null;
   notes: string | null;
+  missing: boolean;
   displayTitle: string | null;
   coverImageUrl: string | null;
   circle: string | null;

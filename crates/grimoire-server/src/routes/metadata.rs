@@ -22,6 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/edit-work", post(edit_work))
         .route("/edit-item", post(edit_item))
         .route("/manual", post(manual))
+        .route("/delete-item", post(delete_item))
+        .route("/delete-missing", post(delete_missing))
 }
 
 // ---- source dispatch ------------------------------------------------------
@@ -393,6 +395,45 @@ async fn edit_work(
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// One-shot cleanup: drop every inventory_item flagged missing. Returned
+/// count tells the UI how many rows actually went away.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteMissingResponse {
+    deleted: u64,
+}
+
+async fn delete_missing(
+    State(state): State<AppState>,
+) -> Result<Json<DeleteMissingResponse>, StatusCode> {
+    let result = sqlx::query("DELETE FROM inventory_items WHERE missing = true")
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(DeleteMissingResponse {
+        deleted: result.rows_affected(),
+    }))
+}
+
+/// Hard-delete an inventory_item row. Use this to drop orphan records once
+/// the underlying file is gone for good (e.g. Synology #recycle exits scan
+/// scope after the user emptied the recycle bin). The linked game_work is
+/// left untouched in case other inventory items reference it.
+async fn delete_item(
+    State(state): State<AppState>,
+    Json(body): Json<ItemIdRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let result = sqlx::query("DELETE FROM inventory_items WHERE id = $1")
+        .bind(body.inventory_item_id)
+        .execute(&state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if result.rows_affected() == 0 {
+        return Err(StatusCode::NOT_FOUND);
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
