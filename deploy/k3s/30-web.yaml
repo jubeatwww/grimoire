@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grimoire-web
+  namespace: grimoire
+  labels:
+    app: grimoire-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grimoire-web
+  template:
+    metadata:
+      labels:
+        app: grimoire-web
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: web
+          image: ghcr.io/jubeatwww/grimoire-web:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grimoire-web
+  namespace: grimoire
+spec:
+  selector:
+    app: grimoire-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

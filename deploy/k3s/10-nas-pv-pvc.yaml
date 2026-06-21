@@ -1,0 +1,40 @@
+# Direct NFS-backed PV — the share is on the NAS, the pod mounts it
+# straight via the in-tree NFS driver. No host-side mount needed.
+#
+# `claimRef` pre-binds this PV to the matching PVC below so the cluster
+# never accidentally binds it to some other pending claim.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grimoire-nas
+spec:
+  capacity:
+    storage: 2Ti          # NFS ignores quota; this is a label for accounting
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nfs-direct
+  mountOptions:
+    - nfsvers=4
+    - hard
+    - timeo=600
+  nfs:
+    server: 192.168.1.103
+    path: /volume1/games
+  claimRef:
+    namespace: grimoire
+    name: grimoire-nas
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grimoire-nas
+  namespace: grimoire
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Ti
+  storageClassName: nfs-direct
+  volumeName: grimoire-nas

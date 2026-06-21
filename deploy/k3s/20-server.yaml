@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grimoire-server
+  namespace: grimoire
+  labels:
+    app: grimoire-server
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate — RWX is fine, but only one writer keeps
+  # the asset cache + missing-file scan logic simple.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: grimoire-server
+  template:
+    metadata:
+      labels:
+        app: grimoire-server
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: server
+          image: ghcr.io/jubeatwww/grimoire-server:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: GRIMOIRE_LIBRARY_ROOT
+              value: /mnt/games
+            - name: GRIMOIRE_ASSET_CACHE_ROOT
+              value: /mnt/games/grimoire-assets
+            - name: GRIMOIRE_DATABASE_HOST
+              value: pg-main-rw.database.svc.cluster.local
+            - name: GRIMOIRE_DATABASE_PORT
+              value: "5432"
+            - name: GRIMOIRE_DATABASE_NAME
+              value: app
+            - name: GRIMOIRE_DATABASE_USER
+              value: app
+            - name: GRIMOIRE_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grimoire-db
+                  key: password
+            - name: GRIMOIRE_DATABASE_SCHEMA
+              value: grimoire
+            - name: RUST_LOG
+              value: grimoire_server=info,tower_http=info
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: nas
+              mountPath: /mnt/games
+      volumes:
+        - name: nas
+          persistentVolumeClaim:
+            claimName: grimoire-nas
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grimoire-server
+  namespace: grimoire
+spec:
+  selector:
+    app: grimoire-server
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

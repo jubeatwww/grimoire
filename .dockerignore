@@ -1,0 +1,13 @@
+target/
+**/target/
+node_modules/
+**/node_modules/
+web/dist/
+web/src-tauri/target/
+.git/
+.idea/
+.vscode/
+*.stackdump
+.env
+docs/
+fixtures/
