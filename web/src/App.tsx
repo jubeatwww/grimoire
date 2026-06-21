@@ -4,6 +4,7 @@ import { fetchLibrary, skipInventoryItem, triggerScan } from "./api/client";
 import type { InventoryItem } from "./api/types";
 import { AppShell } from "./components/AppShell";
 import { DetailPanel } from "./components/DetailPanel";
+import { FilterDropdown } from "./components/FilterDropdown";
 import { LibraryGrid } from "./components/LibraryGrid";
 import { LibraryTable } from "./components/LibraryTable";
 import { OrganizeMode } from "./components/OrganizeMode";
@@ -19,16 +20,7 @@ export interface FilterOption {
   id: string;
   count: number;
 }
-export interface FilterOptions {
-  primary: FilterOption[];
-  workType: FilterOption[];
-  legacy: FilterOption[];
-  tags: FilterOption[];
-}
 
-/// Hardcoded list for the primary-category SELECT dropdown when editing an
-/// item — gives the user something to pick from on a fresh library. Sidebar
-/// filter chips no longer use this; they derive from actual item data.
 export const PRIMARY_CATEGORIES = [
   "Visual Novel",
   "Action",
@@ -38,10 +30,15 @@ export const PRIMARY_CATEGORIES = [
   "3D",
 ];
 
-export const QUICK_FILTERS: { id: string; label: string }[] = [
-  { id: "needs-review", label: "Needs review" },
-  { id: "has-dlsite", label: "Has DLsite" },
-  { id: "missing-cover", label: "Missing cover" },
+const QUICK_FILTER_LABELS: Record<string, string> = {
+  "needs-review": "Needs review",
+  "has-dlsite": "Has DLsite",
+  "missing-cover": "Missing cover",
+};
+const QUICK_FILTER_OPTIONS: FilterOption[] = [
+  { id: "needs-review", count: 0 },
+  { id: "has-dlsite", count: 0 },
+  { id: "missing-cover", count: 0 },
 ];
 
 function emptyFilters(): Filters {
@@ -125,15 +122,13 @@ export function App() {
     [items, filters],
   );
 
-  const options = useMemo<FilterOptions>(
-    () => ({
-      primary: countByValue(items, (i) => i.primaryCategory),
-      workType: countByValue(items, (i) => i.workTypeLabel ?? i.workType),
-      legacy: countByValue(items, (i) => i.legacyLocation),
-      tags: countByList(items, (i) => i.sourceTags),
-    }),
+  const primaryOpts = useMemo(() => countByValue(items, (i) => i.primaryCategory), [items]);
+  const workTypeOpts = useMemo(
+    () => countByValue(items, (i) => i.workTypeLabel ?? i.workType),
     [items],
   );
+  const legacyOpts = useMemo(() => countByValue(items, (i) => i.legacyLocation), [items]);
+  const tagsOpts = useMemo(() => countByList(items, (i) => i.sourceTags), [items]);
 
   const selectedItem = useMemo(
     () =>
@@ -191,9 +186,6 @@ export function App() {
 
   return (
     <AppShell
-      filters={filters}
-      options={options}
-      onToggleFilter={toggleFilter}
       chromeless={isOrganize}
       detail={
         isOrganize ? null : (
@@ -217,8 +209,16 @@ export function App() {
       ) : (
         <>
           <header className="topbar">
+            <div className="brand">HG</div>
+            <nav className="topbar-nav">
+              <button className="active">作品庫</button>
+              <button>匯入 staging</button>
+              <button>下載紀錄</button>
+              <button>設定</button>
+            </nav>
             <input
               type="search"
+              className="topbar-search"
               aria-label="Search title, filename, circle, tag, DLsite id"
               placeholder="Search title, filename, circle, tag, or DLsite ID"
             />
@@ -228,28 +228,66 @@ export function App() {
             <button className="primary">Import</button>
             <ThemeToggle />
           </header>
-          <div className="view-switch">
-            <button
-              className={viewMode === "cover" ? "active" : ""}
-              onClick={() => setViewMode("cover")}
-            >
-              Cover
-            </button>
-            <button
-              className={viewMode === "table" ? "active" : ""}
-              onClick={() => setViewMode("table")}
-            >
-              Table
-            </button>
-            <button
-              className={viewMode === "review" ? "active" : ""}
-              onClick={() => setViewMode("review")}
-            >
-              Review Queue{pendingCount > 0 ? ` (${pendingCount})` : ""}
-            </button>
-            <button onClick={() => setViewMode("organize")}>
-              Organize{organizeCount > 0 ? ` (${organizeCount})` : ""}
-            </button>
+          <div className="filters-bar">
+            <div className="view-switch">
+              <button
+                className={viewMode === "cover" ? "active" : ""}
+                onClick={() => setViewMode("cover")}
+              >
+                Cover
+              </button>
+              <button
+                className={viewMode === "table" ? "active" : ""}
+                onClick={() => setViewMode("table")}
+              >
+                Table
+              </button>
+              <button
+                className={viewMode === "review" ? "active" : ""}
+                onClick={() => setViewMode("review")}
+              >
+                Review Queue{pendingCount > 0 ? ` (${pendingCount})` : ""}
+              </button>
+              <button onClick={() => setViewMode("organize")}>
+                Organize{organizeCount > 0 ? ` (${organizeCount})` : ""}
+              </button>
+            </div>
+            <div className="filters-bar-divider" />
+            <FilterDropdown
+              label="Primary"
+              options={primaryOpts}
+              selected={filters.primary}
+              onToggle={(v) => toggleFilter("primary", v)}
+            />
+            <FilterDropdown
+              label="Work type"
+              options={workTypeOpts}
+              selected={filters.workType}
+              onToggle={(v) => toggleFilter("workType", v)}
+            />
+            <FilterDropdown
+              label="Tags"
+              options={tagsOpts}
+              selected={filters.tags}
+              onToggle={(v) => toggleFilter("tags", v)}
+              searchable
+              wide
+              initialLimit={30}
+            />
+            <FilterDropdown
+              label="Legacy"
+              options={legacyOpts}
+              selected={filters.legacy}
+              onToggle={(v) => toggleFilter("legacy", v)}
+            />
+            <FilterDropdown
+              label="Quick"
+              options={QUICK_FILTER_OPTIONS}
+              selected={filters.quick}
+              onToggle={(v) => toggleFilter("quick", v)}
+              labels={QUICK_FILTER_LABELS}
+              hideCounts
+            />
           </div>
           {viewMode === "cover" && (
             <LibraryGrid
