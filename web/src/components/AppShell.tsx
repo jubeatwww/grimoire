@@ -14,6 +14,13 @@ export function AppShell({ children, detail, chromeless }: AppShellProps) {
       </div>
     );
   }
+  if (!detail) {
+    return (
+      <div className="app-shell app-shell-no-detail">
+        <main className="main-pane">{children}</main>
+      </div>
+    );
+  }
   return (
     <div className="app-shell">
       <main className="main-pane">{children}</main>

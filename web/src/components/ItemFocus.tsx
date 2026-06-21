@@ -14,6 +14,9 @@ import { useImagePreview } from "./useImagePreview";
 interface ItemFocusProps {
   item: InventoryItem;
   onChanged?: () => void;
+  /// Browse mode renders its own Gallery for cover + samples, so ItemFocus
+  /// should skip its own preview-image grid and (optionally) the large cover.
+  hideMedia?: boolean;
 }
 
 function formatBytes(n: number): string {
@@ -28,7 +31,7 @@ function formatBytes(n: number): string {
   return `${v.toFixed(v < 10 ? 2 : 1)} ${units[i]}`;
 }
 
-export function ItemFocus({ item, onChanged }: ItemFocusProps) {
+export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   const { hoverProps, preview, clear: clearPreview } = useImagePreview();
 
   // Drop any pending hover preview when the focused item changes — the anchor
@@ -74,11 +77,11 @@ export function ItemFocus({ item, onChanged }: ItemFocusProps) {
 
   return (
     <div className="item-focus">
-      {item.coverImageUrl ? (
+      {!hideMedia && (item.coverImageUrl ? (
         <img className="large-cover large-cover-image" src={item.coverImageUrl} alt="" />
       ) : (
         <div className="large-cover" />
-      )}
+      ))}
       <div className="detail-title-row">
         <h2>
           {item.displayTitle ? (
@@ -161,7 +164,7 @@ export function ItemFocus({ item, onChanged }: ItemFocusProps) {
       {item.description && (
         <p className="detail-description">{item.description}</p>
       )}
-      {item.previewImageUrls && item.previewImageUrls.length > 0 && (
+      {!hideMedia && item.previewImageUrls && item.previewImageUrls.length > 0 && (
         <div className="detail-previews">
           {item.previewImageUrls.map((url) => (
             <a

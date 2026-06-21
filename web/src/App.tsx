@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchLibrary, skipInventoryItem, triggerScan } from "./api/client";
 import type { InventoryItem } from "./api/types";
 import { AppShell } from "./components/AppShell";
+import { BrowseMode } from "./components/BrowseMode";
 import { DetailPanel } from "./components/DetailPanel";
 import { FilterDropdown } from "./components/FilterDropdown";
 import { LibraryGrid } from "./components/LibraryGrid";
@@ -11,7 +12,7 @@ import { OrganizeMode } from "./components/OrganizeMode";
 import { ReviewQueue } from "./components/ReviewQueue";
 import { ThemeToggle } from "./components/ThemeToggle";
 
-type ViewMode = "cover" | "table" | "review" | "organize";
+type ViewMode = "cover" | "table" | "review" | "organize" | "browse";
 
 export type FilterGroup = "primary" | "workType" | "quick" | "legacy" | "tags";
 export type Filters = Record<FilterGroup, Set<string>>;
@@ -183,12 +184,13 @@ export function App() {
   ).length;
 
   const isOrganize = viewMode === "organize";
+  const isBrowse = viewMode === "browse";
 
   return (
     <AppShell
       chromeless={isOrganize}
       detail={
-        isOrganize ? null : (
+        isOrganize || isBrowse ? null : (
           <DetailPanel
             item={selectedItem}
             autoSearchToken={autoSearchToken}
@@ -235,6 +237,12 @@ export function App() {
                 onClick={() => setViewMode("cover")}
               >
                 Cover
+              </button>
+              <button
+                className={viewMode === "browse" ? "active" : ""}
+                onClick={() => setViewMode("browse")}
+              >
+                Browse
               </button>
               <button
                 className={viewMode === "table" ? "active" : ""}
@@ -305,6 +313,15 @@ export function App() {
           )}
           {viewMode === "review" && (
             <ReviewQueue items={items} onReview={handleReviewItem} />
+          )}
+          {viewMode === "browse" && (
+            <BrowseMode
+              items={filteredItems}
+              selectedId={selectedItem?.id ?? null}
+              autoSearchToken={autoSearchToken}
+              onSelect={(item) => setSelectedId(item.id)}
+              onMetadataConfirmed={handleMetadataConfirmed}
+            />
           )}
         </>
       )}
