@@ -8,12 +8,27 @@ import { LibraryGrid } from "./components/LibraryGrid";
 import { LibraryTable } from "./components/LibraryTable";
 import { OrganizeMode } from "./components/OrganizeMode";
 import { ReviewQueue } from "./components/ReviewQueue";
+import { ThemeToggle } from "./components/ThemeToggle";
 
 type ViewMode = "cover" | "table" | "review" | "organize";
 
-export type FilterGroup = "primary" | "quick" | "legacy";
+export type FilterGroup = "primary" | "workType" | "quick" | "legacy" | "tags";
 export type Filters = Record<FilterGroup, Set<string>>;
 
+export interface FilterOption {
+  id: string;
+  count: number;
+}
+export interface FilterOptions {
+  primary: FilterOption[];
+  workType: FilterOption[];
+  legacy: FilterOption[];
+  tags: FilterOption[];
+}
+
+/// Hardcoded list for the primary-category SELECT dropdown when editing an
+/// item — gives the user something to pick from on a fresh library. Sidebar
+/// filter chips no longer use this; they derive from actual item data.
 export const PRIMARY_CATEGORIES = [
   "Visual Novel",
   "Action",
@@ -22,26 +37,76 @@ export const PRIMARY_CATEGORIES = [
   "Strategy",
   "3D",
 ];
+
 export const QUICK_FILTERS: { id: string; label: string }[] = [
   { id: "needs-review", label: "Needs review" },
   { id: "has-dlsite", label: "Has DLsite" },
   { id: "missing-cover", label: "Missing cover" },
 ];
-export const LEGACY_LOCATIONS = ["ADV", "ACT", "RPG", "舊 SIM+SLG", "未分類"];
 
 function emptyFilters(): Filters {
-  return { primary: new Set(), quick: new Set(), legacy: new Set() };
+  return {
+    primary: new Set(),
+    workType: new Set(),
+    quick: new Set(),
+    legacy: new Set(),
+    tags: new Set(),
+  };
 }
 
 function matches(item: InventoryItem, f: Filters): boolean {
   if (f.primary.size && !f.primary.has(item.primaryCategory ?? "")) return false;
+  if (f.workType.size && !f.workType.has(item.workTypeLabel ?? item.workType ?? "")) {
+    return false;
+  }
   if (f.legacy.size && !f.legacy.has(item.legacyLocation ?? "")) return false;
+  if (f.tags.size) {
+    const itemTags = item.sourceTags ?? [];
+    let any = false;
+    for (const t of itemTags) {
+      if (f.tags.has(t)) {
+        any = true;
+        break;
+      }
+    }
+    if (!any) return false;
+  }
   for (const q of f.quick) {
     if (q === "needs-review" && item.organizationStatus !== "pending") return false;
     if (q === "has-dlsite" && !item.displayTitle) return false;
     if (q === "missing-cover" && item.coverImageUrl) return false;
   }
   return true;
+}
+
+function countByValue<T>(
+  items: T[],
+  getter: (item: T) => string | null | undefined,
+): FilterOption[] {
+  const m = new Map<string, number>();
+  for (const item of items) {
+    const v = getter(item);
+    if (!v) continue;
+    m.set(v, (m.get(v) ?? 0) + 1);
+  }
+  return [...m.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id, count]) => ({ id, count }));
+}
+
+function countByList<T>(
+  items: T[],
+  getter: (item: T) => string[] | null | undefined,
+): FilterOption[] {
+  const m = new Map<string, number>();
+  for (const item of items) {
+    const list = getter(item);
+    if (!list) continue;
+    for (const v of list) m.set(v, (m.get(v) ?? 0) + 1);
+  }
+  return [...m.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id, count]) => ({ id, count }));
 }
 
 export function App() {
@@ -58,6 +123,16 @@ export function App() {
   const filteredItems = useMemo(
     () => items.filter((i) => matches(i, filters)),
     [items, filters],
+  );
+
+  const options = useMemo<FilterOptions>(
+    () => ({
+      primary: countByValue(items, (i) => i.primaryCategory),
+      workType: countByValue(items, (i) => i.workTypeLabel ?? i.workType),
+      legacy: countByValue(items, (i) => i.legacyLocation),
+      tags: countByList(items, (i) => i.sourceTags),
+    }),
+    [items],
   );
 
   const selectedItem = useMemo(
@@ -117,6 +192,7 @@ export function App() {
   return (
     <AppShell
       filters={filters}
+      options={options}
       onToggleFilter={toggleFilter}
       chromeless={isOrganize}
       detail={
@@ -150,6 +226,7 @@ export function App() {
               {scanning ? "Scanning..." : "Scan"}
             </button>
             <button className="primary">Import</button>
+            <ThemeToggle />
           </header>
           <div className="view-switch">
             <button
