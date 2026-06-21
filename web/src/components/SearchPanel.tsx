@@ -94,7 +94,8 @@ export function SearchPanel({ item, autoSearchToken, onChanged }: SearchPanelPro
     setCandidates([]);
     setError(null);
     setLinkInput("");
-  }, [item.id]);
+    clearPreview();
+  }, [item.id, clearPreview]);
 
   useEffect(() => {
     if (!autoSearchToken || autoSearchToken === 0) return;

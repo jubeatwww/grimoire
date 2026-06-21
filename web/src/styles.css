@@ -291,8 +291,9 @@ button.chip.muted { color: #97a1b0; }
 }
 .large-cover-image {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
   display: block;
   border-radius: 8px;
   background: #f0f2f5;
@@ -467,7 +468,7 @@ button.chip.muted { color: #97a1b0; }
 .inline-edit-placeholder { color: #97a1b0; font-style: italic; }
 .inline-edit-input {
   font: inherit;
-  color: inherit;
+  color: #1f252d;
   background: #fff;
   border: 1px solid #0f766e;
   border-radius: 4px;
@@ -479,6 +480,8 @@ button.chip.muted { color: #97a1b0; }
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .primary-select {

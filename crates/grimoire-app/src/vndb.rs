@@ -1,4 +1,4 @@
-use crate::metadata_source::{MetadataSource, ProductDetail};
+use crate::metadata_source::{null_to_default, MetadataSource, ProductDetail};
 use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
 use regex::Regex;
@@ -176,12 +176,12 @@ struct VnLite {
     id: String,
     title: String,
     olang: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     titles: Vec<VnTitleEntry>,
     description: Option<String>,
     released: Option<String>,
     image: Option<VndbImage>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     developers: Vec<VndbDeveloper>,
 }
 
@@ -189,18 +189,18 @@ struct VnLite {
 struct VnFull {
     title: String,
     olang: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     titles: Vec<VnTitleEntry>,
     description: Option<String>,
     released: Option<String>,
     rating: Option<f32>,
     votecount: Option<i32>,
     image: Option<VndbImage>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     tags: Vec<VndbTag>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     developers: Vec<VndbDeveloper>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     screenshots: Vec<VndbImage>,
 }
 

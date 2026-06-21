@@ -1,6 +1,18 @@
 use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
+use serde::{Deserialize, Deserializer};
 use uuid::Uuid;
+
+/// Coerce JSON `null` into the default for `T`. `#[serde(default)]` only
+/// covers missing keys; DLsite (and occasionally VNDB) sends explicit nulls
+/// for absent arrays, which would otherwise fail Vec deserialization.
+pub fn null_to_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(|o| o.unwrap_or_default())
+}
 
 #[async_trait::async_trait]
 pub trait MetadataSource {

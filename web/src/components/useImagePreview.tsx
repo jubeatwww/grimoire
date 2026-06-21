@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 const PREVIEW_W = 480;
 const PREVIEW_H = 360;
@@ -27,7 +27,7 @@ export function useImagePreview(): {
   clear: () => void;
 } {
   const [state, setState] = useState<PreviewState | null>(null);
-  const clear = () => setState(null);
+  const clear = useCallback(() => setState(null), []);
 
   const hoverProps = (src: string | null | undefined) =>
     src

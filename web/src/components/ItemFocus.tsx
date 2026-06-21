@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { PRIMARY_CATEGORIES } from "../App";
 import {
   downloadUrl,
@@ -8,6 +9,7 @@ import {
 } from "../api/client";
 import type { InventoryItem } from "../api/types";
 import { InlineText } from "./InlineText";
+import { useImagePreview } from "./useImagePreview";
 
 interface ItemFocusProps {
   item: InventoryItem;
@@ -27,6 +29,12 @@ function formatBytes(n: number): string {
 }
 
 export function ItemFocus({ item, onChanged }: ItemFocusProps) {
+  const { hoverProps, preview, clear: clearPreview } = useImagePreview();
+
+  // Drop any pending hover preview when the focused item changes — the anchor
+  // image unmounts so mouseleave never fires on its own.
+  useEffect(() => clearPreview(), [item.id, clearPreview]);
+
   const handleRefresh = async (source: "dlsite" | "vndb") => {
     try {
       await refreshMetadata(item.id, source);
@@ -162,6 +170,7 @@ export function ItemFocus({ item, onChanged }: ItemFocusProps) {
               target="_blank"
               rel="noreferrer"
               className="detail-preview"
+              {...hoverProps(url)}
             >
               <img src={url} alt="" loading="lazy" />
             </a>
@@ -222,6 +231,7 @@ export function ItemFocus({ item, onChanged }: ItemFocusProps) {
           )}
         </div>
       )}
+      {preview}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-use crate::metadata_source::{MetadataSource, ProductDetail};
+use crate::metadata_source::{null_to_default, MetadataSource, ProductDetail};
 use chrono::NaiveDate;
 use grimoire_domain::metadata::MetadataCandidate;
 use regex::Regex;
@@ -144,7 +144,7 @@ fn cover_url_for_workno(workno: &str) -> Option<String> {
 
 #[derive(Debug, Default, Deserialize)]
 struct SuggestResponse {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     work: Vec<SuggestWork>,
 }
 
@@ -166,10 +166,10 @@ struct ProductJson {
     intro_s: Option<String>,
     regist_date: Option<String>,
     series_name: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     genres: Vec<GenreJson>,
     image_main: Option<ImageJson>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_to_default")]
     image_samples: Vec<ImageJson>,
     file_type_string: Option<String>,
     contents_file_size: Option<i64>,
