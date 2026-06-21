@@ -591,7 +591,7 @@ button.chip.chip-on .chip-count {
 .detail-source-actions {
   display: flex;
   gap: 6px;
-  margin: -4px 0 10px;
+  margin: 14px 0 10px;
 }
 .source-refresh {
   height: 28px;
@@ -818,14 +818,34 @@ button.chip.chip-on .chip-count {
   border-color: var(--accent);
   color: #fff;
 }
-.detail h2 { font-size: 17px; line-height: 1.25; }
-.detail dl {
+.detail h2,
+.item-focus h2 { font-size: 17px; line-height: 1.25; }
+.detail dl,
+.item-focus dl {
   display: grid;
-  grid-template-columns: 110px 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(96px, max-content) 1fr;
+  column-gap: 14px;
+  row-gap: 6px;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  background: var(--bg-muted);
+  border-radius: 7px;
+  font-size: 12px;
 }
-.detail dt { color: var(--text-muted); }
-.detail dd { margin: 0; }
+.detail dt,
+.item-focus dt {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: .05em;
+  align-self: center;
+}
+.detail dd,
+.item-focus dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
 .detail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .library-table-wrap { padding: 16px; }
 .library-table {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { InventoryItem, OrganizationStatus } from "../api/types";
 import { Gallery } from "./Gallery";
 import { ItemFocus } from "./ItemFocus";
@@ -28,9 +28,17 @@ export function BrowseMode({
   onMetadataConfirmed,
 }: BrowseModeProps) {
   const [matchExpanded, setMatchExpanded] = useState(false);
+  const activeRef = useRef<HTMLButtonElement | null>(null);
 
   const currentIdx = Math.max(0, items.findIndex((i) => i.id === selectedId));
   const current = items[currentIdx] ?? items[0] ?? null;
+
+  // Keep the active row visible whenever it changes (keyboard nav, refresh,
+  // jump from filter). `block: nearest` avoids jumpy centering when the row
+  // is already in view.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [current?.id]);
 
   // Auto-pick the first item when the list loads or selection falls out of it.
   useEffect(() => {
@@ -88,6 +96,7 @@ export function BrowseMode({
               return (
                 <li key={it.id}>
                   <button
+                    ref={active ? activeRef : undefined}
                     type="button"
                     className={cls}
                     onClick={() => onSelect(it)}

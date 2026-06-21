@@ -54,6 +54,7 @@ export function OrganizeMode({
   const [snapshotIds, setSnapshotIds] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
   const built = useRef(false);
+  const activeRef = useRef<HTMLButtonElement | null>(null);
 
   const rebuild = () => {
     const ids = items.filter((i) => inQueue(i, filters)).map((i) => i.id);
@@ -78,6 +79,10 @@ export function OrganizeMode({
   useEffect(() => {
     if (current) onAutoTrigger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId]);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest" });
   }, [currentId]);
 
   const goPrev = () => {
@@ -214,6 +219,7 @@ export function OrganizeMode({
                 return (
                   <li key={id}>
                     <button
+                      ref={active ? activeRef : undefined}
                       type="button"
                       className={cls}
                       onClick={() => setPos(i)}
