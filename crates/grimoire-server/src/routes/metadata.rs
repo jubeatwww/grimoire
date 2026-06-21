@@ -153,6 +153,7 @@ async fn apply_detail(
             price_jpy          = $12,
             work_type          = $13,
             work_type_label    = $14,
+            enriched_at        = now(),
             updated_at         = now()
          WHERE id = $15"
     } else {
@@ -171,6 +172,7 @@ async fn apply_detail(
             price_jpy          = COALESCE($12, price_jpy),
             work_type          = COALESCE($13, work_type),
             work_type_label    = COALESCE($14, work_type_label),
+            enriched_at        = now(),
             updated_at         = now()
          WHERE id = $15"
     };

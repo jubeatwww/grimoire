@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { InventoryItem } from "../api/types";
-import { DetailPanel } from "./DetailPanel";
+import type { InventoryItem, OrganizationStatus } from "../api/types";
+import { ItemFocus } from "./ItemFocus";
+import { SearchPanel } from "./SearchPanel";
 
 interface OrganizeModeProps {
   items: InventoryItem[];
@@ -14,7 +15,7 @@ interface OrganizeModeProps {
 type Filter = "pending" | "needs-detail" | "no-dlsite";
 const ALL_FILTERS: { id: Filter; label: string; desc: string }[] = [
   { id: "pending", label: "Pending", desc: "no source match yet" },
-  { id: "needs-detail", label: "Confirmed · missing detail", desc: "needs metadata refresh" },
+  { id: "needs-detail", label: "Confirmed · missing detail", desc: "never enriched" },
   { id: "no-dlsite", label: "No DLsite match", desc: "skipped before — try VNDB" },
 ];
 
@@ -23,13 +24,21 @@ function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
   if (
     filters.has("needs-detail") &&
     item.organizationStatus === "confirmed" &&
-    !item.description
+    !item.enrichedAt
   ) {
     return true;
   }
   if (filters.has("no-dlsite") && item.organizationStatus === "no_match") return true;
   return false;
 }
+
+const STATUS_ICON: Record<OrganizationStatus, string> = {
+  pending: "○",
+  matched: "◐",
+  confirmed: "✓",
+  ignored: "—",
+  no_match: "✗",
+};
 
 export function OrganizeMode({
   items,
@@ -42,8 +51,6 @@ export function OrganizeMode({
   const [filters, setFilters] = useState<Set<Filter>>(
     () => new Set<Filter>(["pending", "needs-detail"]),
   );
-  // Snapshot keeps the queue stable so confirmed/skipped items stay visible for review.
-  // It rebuilds on filter change or via the Rebuild button.
   const [snapshotIds, setSnapshotIds] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
   const built = useRef(false);
@@ -55,13 +62,11 @@ export function OrganizeMode({
     built.current = true;
   };
 
-  // Rebuild on filter changes.
   useEffect(() => {
     if (built.current) rebuild();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
-  // First-load build once items arrive.
   useEffect(() => {
     if (!built.current && items.length > 0) rebuild();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,11 +75,53 @@ export function OrganizeMode({
   const currentId = snapshotIds[pos] ?? null;
   const current = currentId ? items.find((i) => i.id === currentId) ?? null : null;
 
-  // Auto-fire search/refresh in the embedded DetailPanel whenever we land on a new item.
   useEffect(() => {
     if (current) onAutoTrigger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId]);
+
+  const goPrev = () => {
+    if (pos > 0) setPos(pos - 1);
+  };
+  const goNext = () => {
+    if (pos < snapshotIds.length - 1) setPos(pos + 1);
+  };
+  const skipCurrent = () => {
+    if (!current) return;
+    onSkip(current);
+    goNext();
+  };
+
+  // Keyboard nav. Skip when focus is in an editable field so the user can type
+  // RJ codes / titles without the queue scrolling under them.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goPrev();
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goNext();
+      } else if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        skipCurrent();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos, snapshotIds.length, currentId]);
 
   const toggleFilter = (f: Filter) => {
     setFilters((prev) => {
@@ -84,16 +131,8 @@ export function OrganizeMode({
     });
   };
 
-  const goPrev = () => pos > 0 && setPos(pos - 1);
-  const goNext = () => pos < snapshotIds.length - 1 && setPos(pos + 1);
-  const skipCurrent = () => {
-    if (!current) return;
-    onSkip(current);
-    goNext();
-  };
-
   return (
-    <div className="organize-full">
+    <div className="organize-3col">
       <header className="organize-header">
         <button className="organize-exit" onClick={onExit} title="Back to library">
           ←
@@ -126,27 +165,28 @@ export function OrganizeMode({
             type="button"
             className="organize-rebuild"
             onClick={rebuild}
-            title="Rebuild queue from current filters (drops already-processed items)"
+            title="Rebuild queue from current filters (drops processed)"
           >
             ↻ Rebuild
           </button>
         </div>
         <div className="organize-actions">
-          <button onClick={goPrev} disabled={pos === 0}>
+          <button onClick={goPrev} disabled={pos === 0} title="← Prev">
             ← Prev
           </button>
           <button
             onClick={skipCurrent}
             disabled={!current}
             className="organize-skip"
-            title="Mark as no DLsite match (defer for VNDB later)"
+            title="S · Skip · mark as no DLsite match"
           >
-            Skip
+            Skip (S)
           </button>
           <button
             onClick={goNext}
             disabled={pos >= snapshotIds.length - 1}
             className="organize-next"
+            title="→ Next"
           >
             Next →
           </button>
@@ -154,20 +194,72 @@ export function OrganizeMode({
       </header>
 
       <div className="organize-body">
-        {current ? (
-          <div className="organize-detail-wrap">
-            <DetailPanel
+        <aside className="organize-sidebar">
+          {snapshotIds.length === 0 ? (
+            <p className="organize-sidebar-empty">Queue empty.</p>
+          ) : (
+            <ul className="organize-queue">
+              {snapshotIds.map((id, i) => {
+                const it = items.find((x) => x.id === id);
+                if (!it) return null;
+                const active = i === pos;
+                const processed = it.organizationStatus !== "pending";
+                const cls = [
+                  "organize-queue-item",
+                  active ? "active" : "",
+                  processed ? "processed" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      className={cls}
+                      onClick={() => setPos(i)}
+                      title={it.fileName}
+                    >
+                      <span className={`queue-status status-${it.organizationStatus}`}>
+                        {STATUS_ICON[it.organizationStatus]}
+                      </span>
+                      <span className="queue-thumb">
+                        {it.coverImageUrl ? (
+                          <img src={it.coverImageUrl} alt="" loading="lazy" />
+                        ) : (
+                          <span className="queue-thumb-fallback" />
+                        )}
+                      </span>
+                      <span className="queue-title">
+                        {it.displayTitle ?? it.fileName}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </aside>
+
+        <main className="organize-middle">
+          {current ? (
+            <ItemFocus item={current} onChanged={onMetadataConfirmed} />
+          ) : (
+            <div className="organize-empty">
+              <h2>Nothing in the queue</h2>
+              <p>Toggle filters above or run a scan to populate.</p>
+            </div>
+          )}
+        </main>
+
+        <aside className="organize-right">
+          {current && (
+            <SearchPanel
               item={current}
               autoSearchToken={autoSearchToken}
-              onMetadataConfirmed={onMetadataConfirmed}
+              onChanged={onMetadataConfirmed}
             />
-          </div>
-        ) : (
-          <div className="organize-empty">
-            <h2>Nothing in the queue</h2>
-            <p>Toggle filters or click Rebuild after scanning more items.</p>
-          </div>
-        )}
+          )}
+        </aside>
       </div>
     </div>
   );

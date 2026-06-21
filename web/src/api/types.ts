@@ -37,6 +37,7 @@ export interface InventoryItem {
   workTypeLabel: string | null;
   dlsiteWorkId: string | null;
   vndbId: string | null;
+  enrichedAt: string | null;
 }
 
 export interface LibraryResponse {
