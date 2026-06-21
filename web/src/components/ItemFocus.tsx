@@ -39,7 +39,7 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   // image unmounts so mouseleave never fires on its own.
   useEffect(() => clearPreview(), [item.id, clearPreview]);
 
-  const handleRefresh = async (source: "dlsite" | "vndb") => {
+  const handleRefresh = async (source: "dlsite" | "vndb" | "steam") => {
     try {
       await refreshMetadata(item.id, source);
       onChanged?.();
@@ -236,6 +236,16 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
               title={`Refresh from VNDB (${item.vndbId})`}
             >
               ↻ VNDB
+            </button>
+          )}
+          {item.steamAppId && (
+            <button
+              type="button"
+              className="source-refresh source-refresh-steam"
+              onClick={() => handleRefresh("steam")}
+              title={`Refresh from Steam (${item.steamAppId})`}
+            >
+              ↻ Steam
             </button>
           )}
           {item.organizationStatus !== "pending" && (

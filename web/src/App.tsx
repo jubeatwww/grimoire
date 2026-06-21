@@ -40,6 +40,7 @@ const QUICK_FILTER_LABELS: Record<string, string> = {
   pending: "Pending",
   "has-dlsite": "Has DLsite",
   "has-vndb": "Has VNDB",
+  "has-steam": "Has Steam",
   "no-match": "Skipped",
   excluded: "Excluded",
   "missing-detail": "Missing detail",
@@ -49,6 +50,7 @@ const QUICK_FILTER_OPTIONS: FilterOption[] = [
   { id: "pending", count: 0 },
   { id: "has-dlsite", count: 0 },
   { id: "has-vndb", count: 0 },
+  { id: "has-steam", count: 0 },
   { id: "no-match", count: 0 },
   { id: "excluded", count: 0 },
   { id: "missing-detail", count: 0 },
@@ -74,6 +76,7 @@ function matchesSearch(item: InventoryItem, query: string): boolean {
     item.circle,
     item.dlsiteWorkId,
     item.vndbId,
+    item.steamAppId,
   ];
   for (const h of haystacks) {
     if (h && h.toLowerCase().includes(q)) return true;
@@ -105,6 +108,7 @@ function matches(item: InventoryItem, f: Filters): boolean {
     if (q === "pending" && item.organizationStatus !== "pending") return false;
     if (q === "has-dlsite" && !item.dlsiteWorkId) return false;
     if (q === "has-vndb" && !item.vndbId) return false;
+    if (q === "has-steam" && !item.steamAppId) return false;
     if (q === "no-match" && item.organizationStatus !== "no_match") return false;
     if (q === "excluded" && item.organizationStatus !== "ignored") return false;
     if (

@@ -28,8 +28,9 @@ function cleanQuery(filename: string): string {
 const SOURCE_LABEL: Record<string, string> = {
   dlsite: "DLsite",
   vndb: "VNDB",
+  steam: "Steam",
 };
-const SOURCE_ORDER: Record<string, number> = { dlsite: 0, vndb: 1 };
+const SOURCE_ORDER: Record<string, number> = { dlsite: 0, vndb: 1, steam: 2 };
 
 function groupBySource(
   candidates: MetadataCandidate[],
@@ -76,7 +77,7 @@ export function SearchPanel({ item, autoSearchToken, onChanged }: SearchPanelPro
     }
   };
 
-  const runRefresh = async (source: "dlsite" | "vndb") => {
+  const runRefresh = async (source: "dlsite" | "vndb" | "steam") => {
     setError(null);
     setSearching(true);
     try {
@@ -103,7 +104,13 @@ export function SearchPanel({ item, autoSearchToken, onChanged }: SearchPanelPro
     // confirmed + not yet enriched → refresh the source it has.
     // otherwise → unified search.
     if (item.organizationStatus === "confirmed" && !item.enrichedAt) {
-      const src = item.vndbId ? "vndb" : item.dlsiteWorkId ? "dlsite" : null;
+      const src = item.vndbId
+        ? "vndb"
+        : item.steamAppId
+          ? "steam"
+          : item.dlsiteWorkId
+            ? "dlsite"
+            : null;
       if (src) void runRefresh(src);
     } else if (
       item.organizationStatus !== "confirmed" ||
@@ -171,7 +178,7 @@ export function SearchPanel({ item, autoSearchToken, onChanged }: SearchPanelPro
           value={linkInput}
           onChange={(e) => setLinkInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleLink()}
-          placeholder="Direct link · RJ/VJ/BJ code, vN code, or full URL"
+          placeholder="Direct link · RJ/VJ/BJ, vN, Steam URL, or full URL"
         />
         <button
           onClick={handleLink}

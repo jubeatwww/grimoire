@@ -587,6 +587,7 @@ button.chip.chip-on .chip-count {
 }
 .candidate-source-dlsite { background: var(--accent); }
 .candidate-source-vndb { background: var(--source-vndb); }
+.candidate-source-steam { background: #1e3a5f; }
 .candidate-group-count { font-size: 11px; color: var(--text-dim); text-transform: none; }
 .detail-source-actions {
   display: flex;
@@ -617,6 +618,10 @@ button.chip.chip-on .chip-count {
 .source-refresh-vndb:hover:not(:disabled) {
   color: var(--source-vndb);
   border-color: var(--source-vndb);
+}
+.source-refresh-steam:hover:not(:disabled) {
+  color: #1e3a5f;
+  border-color: #1e3a5f;
 }
 .source-refresh:disabled { opacity: .4; cursor: not-allowed; }
 .source-reset {

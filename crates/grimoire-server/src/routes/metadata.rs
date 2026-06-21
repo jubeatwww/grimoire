@@ -3,6 +3,7 @@ use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use grimoire_app::{
     dlsite::DlsiteSource,
     metadata_source::{MetadataSource, ProductDetail},
+    steam::SteamSource,
     vndb::VndbSource,
 };
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ pub fn router() -> Router<AppState> {
 enum Src {
     Dlsite,
     Vndb,
+    Steam,
 }
 
 impl Src {
@@ -35,6 +37,7 @@ impl Src {
         match s {
             "dlsite" => Some(Self::Dlsite),
             "vndb" => Some(Self::Vndb),
+            "steam" => Some(Self::Steam),
             _ => None,
         }
     }
@@ -43,6 +46,7 @@ impl Src {
         match self {
             Self::Dlsite => DlsiteSource::new().fetch_product_detail(id).await,
             Self::Vndb => VndbSource::new().fetch_product_detail(id).await,
+            Self::Steam => SteamSource::new().fetch_product_detail(id).await,
         }
     }
 }
@@ -51,13 +55,17 @@ fn source_url_for(src: Src, id: &str) -> String {
     match src {
         Src::Dlsite => format!("https://www.dlsite.com/maniax/work/=/product_id/{id}.html"),
         Src::Vndb => format!("https://vndb.org/{id}"),
+        Src::Steam => format!("https://store.steampowered.com/app/{id}/"),
     }
 }
 
-/// Auto-detect which source a raw user-pasted input belongs to. Prefer VNDB
-/// (more specific) when the input looks like a vN code or vndb.org URL so a
-/// stray "v123" doesn't accidentally route to DLsite's id parser.
+/// Auto-detect which source a raw user-pasted input belongs to. Order matters
+/// from most-specific to most-permissive: Steam (full store URL) → VNDB
+/// (vN token or vndb.org URL) → DLsite (RJ/VJ/BJ code or dlsite.com URL).
 fn detect_link_source(input: &str) -> Option<(Src, String)> {
+    if let Some(id) = SteamSource::extract_app_id(input) {
+        return Some((Src::Steam, id));
+    }
     if let Some(id) = VndbSource::extract_id(input) {
         return Some((Src::Vndb, id));
     }
@@ -77,6 +85,7 @@ async fn find_game_work_by_external_id(
     let sql = match src {
         Src::Dlsite => "SELECT id FROM game_works WHERE dlsite_work_id = $1",
         Src::Vndb => "SELECT id FROM game_works WHERE vndb_id = $1",
+        Src::Steam => "SELECT id FROM game_works WHERE steam_app_id = $1",
     };
     let row = sqlx::query(sql)
         .bind(id)
@@ -110,6 +119,12 @@ async fn insert_game_work(
                 vndb_id, genre_facets
             ) VALUES ($1, $2, $3, $4, $5, $6, $7)"
         }
+        Src::Steam => {
+            "INSERT INTO game_works (
+                id, canonical_title, display_title, circle, source_urls,
+                steam_app_id, genre_facets
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        }
     };
     sqlx::query(sql)
         .bind(new_id)
@@ -138,46 +153,35 @@ async fn apply_detail(
 ) -> Result<(), StatusCode> {
     let tags_json = serde_json::json!(detail.tags);
     let previews_json = serde_json::json!(detail.preview_image_urls);
-    let sql = if overwrite {
-        "UPDATE game_works SET
-            description        = $1,
-            release_date       = COALESCE($2, release_date),
-            series             = $3,
-            source_tags        = $4,
-            cover_image_url    = COALESCE($5, cover_image_url),
-            preview_image_urls = $6,
-            file_type          = $7,
-            file_size_bytes    = $8,
-            dl_count           = $9,
-            rate_average       = $10,
-            rate_count         = $11,
-            price_jpy          = $12,
-            work_type          = $13,
-            work_type_label    = $14,
-            enriched_at        = now(),
-            updated_at         = now()
-         WHERE id = $15"
-    } else {
-        "UPDATE game_works SET
-            description        = COALESCE($1, description),
-            release_date       = COALESCE($2, release_date),
-            series             = COALESCE($3, series),
-            source_tags        = $4,
-            cover_image_url    = COALESCE($5, cover_image_url),
-            preview_image_urls = $6,
-            file_type          = COALESCE($7, file_type),
-            file_size_bytes    = COALESCE($8, file_size_bytes),
-            dl_count           = COALESCE($9, dl_count),
-            rate_average       = COALESCE($10, rate_average),
-            rate_count         = COALESCE($11, rate_count),
-            price_jpy          = COALESCE($12, price_jpy),
-            work_type          = COALESCE($13, work_type),
-            work_type_label    = COALESCE($14, work_type_label),
-            enriched_at        = now(),
-            updated_at         = now()
-         WHERE id = $15"
-    };
-    sqlx::query(sql)
+    let result = if overwrite {
+        // refresh / link path: the user explicitly chose this source, so it
+        // wins on the source-derived fields — including title and circle, so
+        // a locale-switched refresh actually updates the display string.
+        sqlx::query(
+            "UPDATE game_works SET
+                display_title      = COALESCE($1, display_title),
+                canonical_title    = COALESCE($1, canonical_title),
+                circle             = COALESCE($2, circle),
+                description        = $3,
+                release_date       = COALESCE($4, release_date),
+                series             = $5,
+                source_tags        = $6,
+                cover_image_url    = COALESCE($7, cover_image_url),
+                preview_image_urls = $8,
+                file_type          = $9,
+                file_size_bytes    = $10,
+                dl_count           = $11,
+                rate_average       = $12,
+                rate_count         = $13,
+                price_jpy          = $14,
+                work_type          = $15,
+                work_type_label    = $16,
+                enriched_at        = now(),
+                updated_at         = now()
+             WHERE id = $17",
+        )
+        .bind(detail.work_name)
+        .bind(detail.maker_name)
         .bind(detail.description)
         .bind(detail.release_date)
         .bind(detail.series)
@@ -195,7 +199,48 @@ async fn apply_detail(
         .bind(game_work_id)
         .execute(db)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    } else {
+        // confirm path: preserve any prior non-null values so a different
+        // source's earlier confirm doesn't get clobbered.
+        sqlx::query(
+            "UPDATE game_works SET
+                description        = COALESCE($1, description),
+                release_date       = COALESCE($2, release_date),
+                series             = COALESCE($3, series),
+                source_tags        = $4,
+                cover_image_url    = COALESCE($5, cover_image_url),
+                preview_image_urls = $6,
+                file_type          = COALESCE($7, file_type),
+                file_size_bytes    = COALESCE($8, file_size_bytes),
+                dl_count           = COALESCE($9, dl_count),
+                rate_average       = COALESCE($10, rate_average),
+                rate_count         = COALESCE($11, rate_count),
+                price_jpy          = COALESCE($12, price_jpy),
+                work_type          = COALESCE($13, work_type),
+                work_type_label    = COALESCE($14, work_type_label),
+                enriched_at        = now(),
+                updated_at         = now()
+             WHERE id = $15",
+        )
+        .bind(detail.description)
+        .bind(detail.release_date)
+        .bind(detail.series)
+        .bind(tags_json)
+        .bind(detail.cover_image_url)
+        .bind(previews_json)
+        .bind(detail.file_type)
+        .bind(detail.file_size_bytes)
+        .bind(detail.dl_count)
+        .bind(detail.rate_average)
+        .bind(detail.rate_count)
+        .bind(detail.price_jpy)
+        .bind(detail.work_type)
+        .bind(detail.work_type_label)
+        .bind(game_work_id)
+        .execute(db)
+        .await
+    };
+    result.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(())
 }
 
@@ -393,13 +438,21 @@ async fn search(
 ) -> Result<Json<SearchResponse>, StatusCode> {
     let dl = DlsiteSource::new();
     let vn = VndbSource::new();
-    let (dl_res, vn_res) = tokio::join!(dl.search(&body.query), vn.search(&body.query));
+    let st = SteamSource::new();
+    let (dl_res, vn_res, st_res) = tokio::join!(
+        dl.search(&body.query),
+        vn.search(&body.query),
+        st.search(&body.query),
+    );
 
     let mut candidates: Vec<grimoire_domain::metadata::MetadataCandidate> = Vec::new();
     if let Ok(v) = dl_res {
         candidates.extend(v);
     }
     if let Ok(v) = vn_res {
+        candidates.extend(v);
+    }
+    if let Ok(v) = st_res {
         candidates.extend(v);
     }
 
@@ -542,7 +595,7 @@ async fn refresh(
     let src = Src::from_name(&body.source).ok_or(StatusCode::BAD_REQUEST)?;
 
     let row = sqlx::query(
-        "SELECT g.id AS game_work_id, g.dlsite_work_id, g.vndb_id
+        "SELECT g.id AS game_work_id, g.dlsite_work_id, g.vndb_id, g.steam_app_id
            FROM inventory_items i
            JOIN game_works g ON g.id = i.game_work_id
           WHERE i.id = $1",
@@ -559,6 +612,7 @@ async fn refresh(
     let external_id: Option<String> = match src {
         Src::Dlsite => row.get("dlsite_work_id"),
         Src::Vndb => row.get("vndb_id"),
+        Src::Steam => row.get("steam_app_id"),
     };
     let Some(external_id) = external_id else {
         return Err(StatusCode::BAD_REQUEST);

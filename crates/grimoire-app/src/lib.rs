@@ -5,5 +5,6 @@ pub mod metadata_source;
 pub mod organization;
 pub mod scanner;
 pub mod staging;
+pub mod steam;
 pub mod storage;
 pub mod vndb;

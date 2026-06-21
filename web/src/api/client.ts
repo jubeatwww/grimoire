@@ -73,8 +73,14 @@ export async function linkInventoryItem(
     body: JSON.stringify({ inventoryItemId: itemId, worknoOrUrl }),
   });
   if (!r.ok) {
-    if (r.status === 400) throw new Error("Couldn't find an RJ/VJ/BJ code in that input");
-    if (r.status === 404) throw new Error("DLsite has no record for that workno");
+    if (r.status === 400) {
+      throw new Error(
+        "Couldn't recognise a Steam URL, VNDB id/URL, or DLsite RJ/VJ/BJ code in that input",
+      );
+    }
+    if (r.status === 404) {
+      throw new Error("Source has no record for that id — double-check the link");
+    }
     throw new Error(`Link failed: ${r.status}`);
   }
 }
@@ -118,7 +124,7 @@ export async function editInventoryItem(
 
 export async function refreshMetadata(
   itemId: string,
-  source: "dlsite" | "vndb",
+  source: "dlsite" | "vndb" | "steam",
 ): Promise<void> {
   const r = await fetch(`${API_BASE}/api/metadata/refresh`, {
     method: "POST",

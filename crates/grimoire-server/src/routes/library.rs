@@ -41,6 +41,7 @@ struct LibraryItem {
     work_type_label: Option<String>,
     dlsite_work_id: Option<String>,
     vndb_id: Option<String>,
+    steam_app_id: Option<String>,
     enriched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -62,7 +63,7 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
                 g.release_date, g.series, g.source_tags, g.preview_image_urls,
                 g.file_type, g.file_size_bytes, g.dl_count, g.rate_average,
                 g.rate_count, g.price_jpy, g.work_type, g.work_type_label,
-                g.dlsite_work_id, g.vndb_id, g.enriched_at
+                g.dlsite_work_id, g.vndb_id, g.steam_app_id, g.enriched_at
          FROM inventory_items i
          LEFT JOIN game_works g ON g.id = i.game_work_id
          ORDER BY i.file_name",
@@ -112,6 +113,7 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
                 work_type_label: row.get("work_type_label"),
                 dlsite_work_id: row.get("dlsite_work_id"),
                 vndb_id: row.get("vndb_id"),
+                steam_app_id: row.get("steam_app_id"),
                 enriched_at: row.get("enriched_at"),
             }
         })
