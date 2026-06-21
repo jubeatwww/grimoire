@@ -6,7 +6,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["multipart"] }
 chrono.workspace = true
 dotenvy.workspace = true
 grimoire-app = { path = "../grimoire-app" }

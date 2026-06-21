@@ -1,3 +1,4 @@
+pub mod assets;
 pub mod download;
 pub mod export;
 pub mod health;
@@ -22,6 +23,7 @@ pub fn router(state: AppState) -> Router {
         .nest("/api/metadata", metadata::router())
         .nest("/api/staging", staging::router())
         .nest("/api/export", export::router())
+        .nest("/api/assets", assets::router())
         .with_state(state)
 }
 
@@ -80,6 +82,7 @@ mod tests {
         router(AppState {
             db,
             library_root: StorageRoot::new("/mnt/games"),
+            asset_cache_root: std::path::PathBuf::from("/tmp/grimoire-assets"),
         })
     }
 }

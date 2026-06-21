@@ -22,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
         &config.database_url,
         &config.database_schema,
         grimoire_app::storage::StorageRoot::new(config.library_root.clone()),
+        config.asset_cache_root.clone(),
     )
     .await?;
     let app = routes::router(state).layer(

@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/reset", post(reset))
         .route("/edit-work", post(edit_work))
         .route("/edit-item", post(edit_item))
+        .route("/manual", post(manual))
 }
 
 // ---- source dispatch ------------------------------------------------------
@@ -338,6 +339,8 @@ struct EditWorkRequest {
     display_title: Option<String>,
     work_type: Option<String>,
     work_type_label: Option<String>,
+    cover_image_url: Option<String>,
+    preview_image_urls: Option<Vec<String>>,
 }
 
 async fn edit_work(
@@ -360,24 +363,89 @@ async fn edit_work(
     };
 
     // display_title is NOT NULL — keep prior value when blank/missing.
-    // work_type / work_type_label: empty string explicitly clears (lets the user
-    // strip an over-eager source-derived value); missing leaves it alone.
+    // work_type / work_type_label / cover_image_url: empty string explicitly
+    // clears (lets the user strip an over-eager source-derived value); missing
+    // leaves it alone.
+    // preview_image_urls: null means no change, an array (possibly empty)
+    // replaces the whole set.
+    let preview_json = body.preview_image_urls.as_ref().map(serde_json::to_value);
+    let preview_value: Option<serde_json::Value> = match preview_json {
+        Some(Ok(v)) => Some(v),
+        Some(Err(_)) => return Err(StatusCode::BAD_REQUEST),
+        None => None,
+    };
     sqlx::query(
         "UPDATE game_works SET
-            display_title    = COALESCE(NULLIF($1, ''), display_title),
-            work_type        = CASE WHEN $2::text IS NULL THEN work_type ELSE NULLIF($2, '') END,
-            work_type_label  = CASE WHEN $3::text IS NULL THEN work_type_label ELSE NULLIF($3, '') END,
-            updated_at       = now()
-         WHERE id = $4",
+            display_title      = COALESCE(NULLIF($1, ''), display_title),
+            work_type          = CASE WHEN $2::text IS NULL THEN work_type ELSE NULLIF($2, '') END,
+            work_type_label    = CASE WHEN $3::text IS NULL THEN work_type_label ELSE NULLIF($3, '') END,
+            cover_image_url    = CASE WHEN $4::text IS NULL THEN cover_image_url ELSE NULLIF($4, '') END,
+            preview_image_urls = COALESCE($5, preview_image_urls),
+            updated_at         = now()
+         WHERE id = $6",
     )
     .bind(body.display_title)
     .bind(body.work_type)
     .bind(body.work_type_label)
+    .bind(body.cover_image_url)
+    .bind(preview_value)
     .bind(game_work_id)
     .execute(&state.db)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Create an empty game_work for a pending inventory item so the user can fill
+/// it in manually via InlineText / image edits. Title defaults to the filename.
+async fn manual(
+    State(state): State<AppState>,
+    Json(body): Json<ItemIdRequest>,
+) -> Result<Json<ConfirmResponse>, StatusCode> {
+    let row = sqlx::query(
+        "SELECT file_name, game_work_id FROM inventory_items WHERE id = $1",
+    )
+    .bind(body.inventory_item_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let Some(row) = row else {
+        return Err(StatusCode::NOT_FOUND);
+    };
+
+    // If the item already links somewhere, treat this as a no-op rather than
+    // creating an orphan game_work the user can't get back to.
+    if let Some(existing) = row.get::<Option<Uuid>, _>("game_work_id") {
+        return Ok(Json(ConfirmResponse {
+            game_work_id: existing.to_string(),
+        }));
+    }
+
+    let file_name: String = row.get("file_name");
+    let new_id = Uuid::new_v4();
+    let source_urls = serde_json::json!([]);
+    let genre_facets = serde_json::json!([]);
+    // enriched_at = now() so the item doesn't immediately bounce into the
+    // "missing detail" filter that targets confirmed-but-never-enriched rows.
+    sqlx::query(
+        "INSERT INTO game_works (
+            id, canonical_title, display_title, source_urls, genre_facets, enriched_at
+        ) VALUES ($1, $2, $3, $4, $5, now())",
+    )
+    .bind(new_id)
+    .bind(&file_name)
+    .bind(&file_name)
+    .bind(&source_urls)
+    .bind(&genre_facets)
+    .execute(&state.db)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    link_inventory_to_work(&state.db, body.inventory_item_id, new_id).await?;
+
+    Ok(Json(ConfirmResponse {
+        game_work_id: new_id.to_string(),
+    }))
 }
 
 #[derive(Deserialize)]

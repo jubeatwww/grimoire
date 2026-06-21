@@ -100,6 +100,8 @@ export async function editWork(
     displayTitle?: string;
     workType?: string;
     workTypeLabel?: string;
+    coverImageUrl?: string;
+    previewImageUrls?: string[];
   },
 ): Promise<void> {
   const r = await fetch(`${API_BASE}/api/metadata/edit-work`, {
@@ -108,6 +110,31 @@ export async function editWork(
     body: JSON.stringify({ inventoryItemId: itemId, ...fields }),
   });
   if (!r.ok) throw new Error(`Edit failed: ${r.status}`);
+}
+
+export async function createManualEntry(itemId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/api/metadata/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inventoryItemId: itemId }),
+  });
+  if (!r.ok) throw new Error(`Manual entry creation failed: ${r.status}`);
+}
+
+export async function uploadAsset(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  const r = await fetch(`${API_BASE}/api/assets/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!r.ok) {
+    if (r.status === 415) throw new Error("Unsupported image type");
+    if (r.status === 413) throw new Error("File too large (max 20MB)");
+    throw new Error(`Upload failed: ${r.status}`);
+  }
+  const data: { url: string } = await r.json();
+  return data.url;
 }
 
 export async function editInventoryItem(

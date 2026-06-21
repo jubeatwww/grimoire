@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { PRIMARY_CATEGORIES } from "../App";
 import {
+  createManualEntry,
   downloadUrl,
   editInventoryItem,
   editWork,
@@ -9,6 +10,7 @@ import {
   resetInventoryItem,
 } from "../api/client";
 import type { InventoryItem } from "../api/types";
+import { CoverEditor } from "./CoverEditor";
 import { InlineText } from "./InlineText";
 import { useImagePreview } from "./useImagePreview";
 
@@ -58,6 +60,15 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
     }
   };
 
+  const handleCreateManual = async () => {
+    try {
+      await createManualEntry(item.id);
+      onChanged?.();
+    } catch (e) {
+      console.error("create manual entry failed", e);
+    }
+  };
+
   const handleExclude = async () => {
     if (
       !confirm(
@@ -92,13 +103,38 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
     onChanged?.();
   };
 
+  const hasGameWork = item.displayTitle != null;
+
   return (
     <div className="item-focus">
-      {!hideMedia && (item.coverImageUrl ? (
-        <img className="large-cover large-cover-image" src={item.coverImageUrl} alt="" />
-      ) : (
-        <div className="large-cover" />
-      ))}
+      {!hideMedia &&
+        (hasGameWork ? (
+          <CoverEditor
+            itemId={item.id}
+            current={item.coverImageUrl}
+            onChanged={() => onChanged?.()}
+          />
+        ) : item.coverImageUrl ? (
+          <img className="large-cover large-cover-image" src={item.coverImageUrl} alt="" />
+        ) : (
+          <div className="large-cover" />
+        ))}
+      {!hasGameWork && (
+        <div className="item-focus-manual">
+          <p>No metadata linked yet.</p>
+          <button
+            type="button"
+            className="item-focus-manual-btn"
+            onClick={handleCreateManual}
+          >
+            + Create manual entry
+          </button>
+          <p className="item-focus-manual-hint">
+            Creates a blank record using the filename as the title; you can then
+            edit everything inline.
+          </p>
+        </div>
+      )}
       <div className="detail-title-row">
         <h2>
           {item.displayTitle ? (
