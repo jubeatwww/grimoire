@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grimoire-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  # One writer at a time keeps the asset cache and the missing-file scan simple.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grimoire-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grimoire-server
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: server
+          image: {{ .Values.images.server }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            # The Postgres cluster in this namespace (app.yaml, database): postgres-rw, with its
+            # credentials and a ready-made URL in Secret postgres-app. Tables go in the schema
+            # grimoire (GRIMOIRE_DATABASE_SCHEMA's default).
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri
+            - name: GRIMOIRE_LIBRARY_ROOT
+              value: /mnt/games
+            - name: GRIMOIRE_ASSET_CACHE_ROOT
+              value: /mnt/games/{{ .Values.assetCacheDir }}
+          ports:
+            - name: http
+              containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources.server | nindent 12 }}
+          volumeMounts:
+            - name: library
+              mountPath: /mnt/games
+      volumes:
+        # Read-write: the server deletes files and writes its asset cache there. The NAS export
+        # has to allow the node.
+        - name: library
+          nfs:
+            server: {{ required "nas.server is required (site.yaml)" .Values.nas.server }}
+            path: {{ required (printf "apps.%s.libraryPath is required (site.yaml)" .Release.Name) .Values.libraryPath }}

@@ -1,0 +1,34 @@
+# LAN only: the hostname resolves to the node's LAN IP, and lan-only refuses the rest. /api goes to
+# the server, everything else to the SPA: one origin, so no CORS and no API URL in the web build.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grimoire
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.certIssuer }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-lan-only@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - {{ include "grimoire.host" . }}
+      secretName: grimoire-tls
+  rules:
+    - host: {{ include "grimoire.host" . }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: grimoire-server
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grimoire-web
+                port:
+                  name: http

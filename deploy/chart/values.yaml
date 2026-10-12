@@ -1,0 +1,37 @@
+# Defaults for grimoire. Its settings (hostname, libraryPath) and the shared ones it reads
+# (nas.server, network.lanCidr) come from the site, which can override these too.
+images:
+  server: ghcr.io/jubeatwww/grimoire-server:latest
+  web: ghcr.io/jubeatwww/grimoire-web:latest
+# latest moves, so each rollout has to pull it again:
+# kubectl -n <namespace> rollout restart deploy/grimoire-server deploy/grimoire-web
+imagePullPolicy: Always
+
+# Pulls the private images (Secret ghcr-pull).
+ghcr:
+  username: jubeatwww
+  # From the site's secrets (app.yaml).
+  token: ""
+
+# ClusterIssuer for the Ingress certificate.
+certIssuer: letsencrypt-prod
+
+# Covers and uploaded images, a directory in the library: on the NAS next to the games, so they
+# survive a rebuild of the cluster.
+assetCacheDir: grimoire-assets
+
+resources:
+  server:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  web:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

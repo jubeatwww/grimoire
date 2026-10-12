@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grimoire-server
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    app.kubernetes.io/name: grimoire-server
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

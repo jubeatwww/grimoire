@@ -1,0 +1,5 @@
+apiVersion: v2
+name: grimoire
+description: Grimoire's server and web UI, with the game library on the NAS.
+type: application
+version: 0.1.0

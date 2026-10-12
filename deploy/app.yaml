@@ -1,0 +1,22 @@
+# Describes this directory to cairn (github.com/jubeatwww/cairn): a site clones this repo into its
+# plugins/ (only deploy/ checked out, see README.md) and installs it with an entry whose app: is
+# grimoire/deploy. Fields: cairn's README "Components and apps".
+description: Grimoire, the game library on the NAS (LAN only)
+# A Postgres cluster in the release's namespace (postgres-rw, Secret postgres-app), dumped every
+# night. Covers and uploaded images live on the NAS with the games, so they need no backup here.
+database: {}
+secrets:
+  ghcr.token:
+    comment: Pulls the private images from ghcr.io. A classic PAT with read:packages only.
+    ask: ghcr.io 的 token（classic PAT，只勾 read:packages）
+site:
+  hostname:
+    comment: "LAN only: its DNS record points at network.nodeIp."
+    ask: Grimoire 的主機名稱（只限內網）
+    example: grimoire.example.com
+    check: hostname
+  libraryPath:
+    comment: NFS export on nas.server with the games, mounted read-write. The server keeps its asset cache there too.
+    ask: 遊戲庫在 NAS 上的 export 路徑
+    example: /volume1/library
+    check: absPath
