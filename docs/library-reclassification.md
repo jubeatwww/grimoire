@@ -218,7 +218,9 @@ unclassified works so the real keyword list can be filled in from data.
 - **Organize queue.** A new "Needs category" filter holds works whose
   suggestion is not confident. The item panel shows the suggestion, its
   reasons, a category picker and the code pills, prefilled from the
-  suggestion.
+  suggestion. The code picker lists the T- and X- forms of the codes that
+  accept them. Adding a code to an empty list also sets the primary category
+  to that code's category.
 - Any manual change of category or codes counts as confirmation.
 - Confirming does not move files.
 

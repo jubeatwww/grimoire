@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CodeDef, Vocabulary } from "./api/types";
-import { canonicalForm, codesMatchQuery, resolveCode } from "./vocabulary";
+import { canonicalForm, codeOptions, codesMatchQuery, resolveCode } from "./vocabulary";
 
 function code(code: string, categoryId: string, family: string, acceptsPrefix = false, aliases: string[] = []): CodeDef {
   return { code, label: code, categoryId, family, acceptsPrefix, aliases, sortOrder: 0 };
@@ -46,5 +46,23 @@ describe("codesMatchQuery", () => {
   });
   it("does not confuse T-RPG with RPG", () => {
     expect(codesMatchQuery(vocab, ["T-RPG"], "rpg")).toBe(false);
+  });
+});
+
+describe("codeOptions", () => {
+  it("offers T- and X- forms right after each code that accepts them", () => {
+    const codes = codeOptions(vocab).map((o) => o.code);
+    expect(codes).toContain("T-HAG");
+    expect(codes.slice(codes.indexOf("HAG²"), codes.indexOf("HAG²") + 3)).toEqual([
+      "HAG²",
+      "T-HAG²",
+      "X-HAG²",
+    ]);
+    expect(codes).not.toContain("T-T-RPG");
+    expect(codes).not.toContain("X-RPG");
+  });
+  it("labels variants and keeps the base category", () => {
+    const touch = codeOptions(vocab).find((o) => o.code === "T-HAP");
+    expect(touch).toEqual({ code: "T-HAP", label: "觸摸 · HAP", categoryId: "HAG" });
   });
 });

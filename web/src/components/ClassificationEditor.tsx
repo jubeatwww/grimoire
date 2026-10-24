@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { confirmClassification } from "../api/client";
 import { useSuggestions, useVocabulary } from "../api/queries";
 import type { InventoryItem, Suggestion } from "../api/types";
-import { resolveCode } from "../vocabulary";
+import { categoryById, codeOptions, resolveCode } from "../vocabulary";
 import { CategoryPill, CodePill } from "./Pills";
 
 interface ClassificationEditorProps {
@@ -55,13 +55,7 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
   const dirty =
     category !== (item.primaryCategory ?? "") || !sameCodes(codes, item.genreFacets);
 
-  const codesByCategory = useMemo(() => {
-    if (!vocab) return [];
-    return vocab.categories.map((c) => ({
-      category: c,
-      codes: vocab.codes.filter((code) => code.categoryId === c.id),
-    }));
-  }, [vocab]);
+  const options = useMemo(() => codeOptions(vocab), [vocab]);
 
   if (!item.gameWorkId) {
     return (
@@ -78,6 +72,8 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
       setError(`${draft.trim()} is not in the code list. Add it under Settings first.`);
       return;
     }
+    // The first code also sets the primary category to the one it belongs to.
+    if (codes.length === 0) setCategory(resolved.base.categoryId);
     setCodes((prev) => (prev.includes(resolved.canonical) ? prev : [...prev, resolved.canonical]));
     setDraft("");
     setError(null);
@@ -185,13 +181,11 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
           aria-label="Add genre code"
         />
         <datalist id="genre-code-options">
-          {codesByCategory.flatMap(({ category: c, codes: list }) =>
-            list.map((code) => (
-              <option key={code.code} value={code.code}>
-                {`${code.label} · ${c.label}`}
-              </option>
-            )),
-          )}
+          {options.map((o) => (
+            <option key={o.code} value={o.code}>
+              {`${o.label} · ${categoryById(vocab, o.categoryId)?.label ?? o.categoryId}`}
+            </option>
+          ))}
         </datalist>
       </div>
       {error && <p className="classify-error">{error}</p>}

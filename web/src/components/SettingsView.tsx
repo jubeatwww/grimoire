@@ -15,7 +15,7 @@ import {
 } from "../api/client";
 import { SUGGESTIONS_KEY, useVocabulary, VOCABULARY_KEY } from "../api/queries";
 import type { CategoryDef, OtherFilesReport, SourceName, WorkTypeRule } from "../api/types";
-import { SOURCE_LABELS } from "../vocabulary";
+import { codeOptions, SOURCE_LABELS } from "../vocabulary";
 import { CodePill, SourceTagPill } from "./Pills";
 
 const SOURCES: SourceName[] = ["dlsite", "vndb", "steam"];
@@ -231,9 +231,9 @@ function RuleSettings() {
         <button type="submit">Add keyword</button>
       </form>
       <datalist id="genre-code-options-settings">
-        {vocab?.codes.map((c) => (
-          <option key={c.code} value={c.code}>
-            {c.label}
+        {codeOptions(vocab).map((o) => (
+          <option key={o.code} value={o.code}>
+            {o.label}
           </option>
         ))}
       </datalist>

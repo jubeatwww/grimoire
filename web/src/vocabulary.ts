@@ -5,6 +5,8 @@ import type { CategoryDef, CodeDef, SourceName, Vocabulary } from "./api/types";
 
 export const VARIANT_PREFIXES = ["T-", "X-"] as const;
 
+const PREFIX_LABELS: Record<string, string> = { "T-": "觸摸", "X-": "局部/斷面" };
+
 export const SOURCE_LABELS: Record<SourceName, string> = {
   dlsite: "DLsite",
   vndb: "VNDB",
@@ -60,8 +62,36 @@ export function codeTitle(vocab: Vocabulary | undefined, code: string): string {
   if (!vocab) return code;
   const r = resolveCode(vocab, code);
   if (!r) return code;
-  const prefix = r.prefix === "T-" ? "觸摸 · " : r.prefix === "X-" ? "局部/斷面 · " : "";
-  return `${prefix}${r.base.label}`;
+  return variantLabel(r.prefix, r.base);
+}
+
+function variantLabel(prefix: string, base: CodeDef): string {
+  return prefix ? `${PREFIX_LABELS[prefix]} · ${base.label}` : base.label;
+}
+
+export interface CodeOption {
+  code: string;
+  label: string;
+  categoryId: string;
+}
+
+/**
+ * Every code a picker can offer, in folder order: each base code followed by
+ * its T- and X- forms when it accepts them.
+ */
+export function codeOptions(vocab: Vocabulary | undefined): CodeOption[] {
+  if (!vocab) return [];
+  const categoryRank = new Map(vocab.categories.map((c) => [c.id, c.sortOrder]));
+  const rank = (c: CodeDef) => categoryRank.get(c.categoryId) ?? Number.MAX_SAFE_INTEGER;
+  return [...vocab.codes]
+    .sort((a, b) => rank(a) - rank(b) || a.sortOrder - b.sortOrder)
+    .flatMap((base) =>
+      ["", ...(base.acceptsPrefix ? VARIANT_PREFIXES : [])].map((prefix) => ({
+        code: prefix + base.code,
+        label: variantLabel(prefix, base),
+        categoryId: base.categoryId,
+      })),
+    );
 }
 
 /**
