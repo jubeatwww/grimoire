@@ -1,7 +1,9 @@
+use crate::routes::refetch::SharedRefetchStatus;
 use anyhow::Context;
 use grimoire_app::storage::StorageRoot;
 use sqlx::{postgres::PgPoolOptions, Executor, PgPool};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -9,6 +11,10 @@ pub struct AppState {
     pub db: PgPool,
     pub library_root: StorageRoot,
     pub asset_cache_root: PathBuf,
+    pub refetch: SharedRefetchStatus,
+    /// Held by scans and by every write to the library (moves, undo, inbox),
+    /// so a scan never sees a half-moved library.
+    pub library_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl AppState {
@@ -50,6 +56,8 @@ impl AppState {
             db,
             library_root,
             asset_cache_root,
+            refetch: SharedRefetchStatus::default(),
+            library_lock: Arc::default(),
         })
     }
 }

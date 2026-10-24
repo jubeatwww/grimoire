@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { InventoryItem, OrganizationStatus } from "../api/types";
+import { useSuggestions } from "../api/queries";
+import type { InventoryItem, OrganizationStatus, Suggestion } from "../api/types";
 import { ItemFocus } from "./ItemFocus";
 import { SearchPanel } from "./SearchPanel";
 
@@ -11,18 +12,55 @@ interface OrganizeModeProps {
   onExclude: (item: InventoryItem) => void;
   onMetadataConfirmed: () => void;
   onExit: () => void;
+  /** Queue filters to start with; defaults to DEFAULT_ORGANIZE_FILTERS. */
+  initialFilters?: OrganizeFilter[];
 }
 
-type Filter = "pending" | "needs-detail" | "skipped" | "excluded";
+export type OrganizeFilter =
+  | "pending"
+  | "needs-detail"
+  | "needs-category"
+  | "skipped"
+  | "excluded";
+type Filter = OrganizeFilter;
+export const DEFAULT_ORGANIZE_FILTERS: OrganizeFilter[] = [
+  "pending",
+  "needs-detail",
+  "needs-category",
+];
 const ALL_FILTERS: { id: Filter; label: string; desc: string }[] = [
   { id: "pending", label: "Pending", desc: "no source match yet" },
   { id: "needs-detail", label: "Missing detail", desc: "confirmed but never enriched" },
+  {
+    id: "needs-category",
+    label: "Needs category",
+    desc: "linked, but the category suggestion needs a decision",
+  },
   { id: "skipped", label: "Skipped", desc: "no_match — couldn't be found on a source" },
   { id: "excluded", label: "Excluded", desc: "ignored — marked not-a-game" },
 ];
 
-function inQueue(item: InventoryItem, filters: Set<Filter>): boolean {
+/** Linked work without a confirmed category whose suggestion is not confident. */
+export function needsCategory(
+  item: InventoryItem,
+  suggestions: Map<string, Suggestion>,
+): boolean {
+  return (
+    !!item.gameWorkId &&
+    !item.categoryConfirmed &&
+    !item.missing &&
+    item.organizationStatus !== "ignored" &&
+    !suggestions.get(item.gameWorkId)?.confident
+  );
+}
+
+function inQueue(
+  item: InventoryItem,
+  filters: Set<Filter>,
+  suggestions: Map<string, Suggestion>,
+): boolean {
   if (filters.has("pending") && item.organizationStatus === "pending") return true;
+  if (filters.has("needs-category") && needsCategory(item, suggestions)) return true;
   if (
     filters.has("needs-detail") &&
     item.organizationStatus === "confirmed" &&
@@ -51,9 +89,11 @@ export function OrganizeMode({
   onExclude,
   onMetadataConfirmed,
   onExit,
+  initialFilters,
 }: OrganizeModeProps) {
+  const { byWork: suggestions, loaded: suggestionsLoaded } = useSuggestions();
   const [filters, setFilters] = useState<Set<Filter>>(
-    () => new Set<Filter>(["pending", "needs-detail"]),
+    () => new Set<Filter>(initialFilters ?? DEFAULT_ORGANIZE_FILTERS),
   );
   const [snapshotIds, setSnapshotIds] = useState<string[]>([]);
   const [pos, setPos] = useState(0);
@@ -61,7 +101,7 @@ export function OrganizeMode({
   const activeRef = useRef<HTMLButtonElement | null>(null);
 
   const rebuild = () => {
-    const ids = items.filter((i) => inQueue(i, filters)).map((i) => i.id);
+    const ids = items.filter((i) => inQueue(i, filters, suggestions)).map((i) => i.id);
     setSnapshotIds(ids);
     setPos(0);
     built.current = true;
@@ -72,10 +112,12 @@ export function OrganizeMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
+  // First build waits for suggestions so "Needs category" knows which works
+  // are confident (those belong to the Classify view instead).
   useEffect(() => {
-    if (!built.current && items.length > 0) rebuild();
+    if (!built.current && items.length > 0 && suggestionsLoaded) rebuild();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length]);
+  }, [items.length, suggestionsLoaded]);
 
   const currentId = snapshotIds[pos] ?? null;
   const current = currentId ? items.find((i) => i.id === currentId) ?? null : null;
@@ -228,7 +270,8 @@ export function OrganizeMode({
                 const it = items.find((x) => x.id === id);
                 if (!it) return null;
                 const active = i === pos;
-                const processed = it.organizationStatus !== "pending";
+                const processed =
+                  it.organizationStatus !== "pending" && !needsCategory(it, suggestions);
                 const cls = [
                   "organize-queue-item",
                   active ? "active" : "",

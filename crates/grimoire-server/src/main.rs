@@ -1,4 +1,7 @@
+mod error;
+mod repo;
 mod routes;
+mod sources;
 mod state;
 
 use grimoire_app::config::AppConfig;
@@ -25,6 +28,12 @@ async fn main() -> anyhow::Result<()> {
         config.asset_cache_root.clone(),
     )
     .await?;
+    // Settle move batches a crash or restart left half-done.
+    match routes::organize::reconcile_at_startup(&state).await {
+        Ok(0) => {}
+        Ok(n) => tracing::warn!(batches = n, "reconciled interrupted move batches"),
+        Err(e) => tracing::error!(error = ?e, "could not reconcile interrupted move batches"),
+    }
     let app = routes::router(state).layer(
         TraceLayer::new_for_http()
             .make_span_with(DefaultMakeSpan::new().level(Level::INFO))

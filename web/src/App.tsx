@@ -7,36 +7,40 @@ import {
   skipInventoryItem,
   triggerScan,
 } from "./api/client";
-import type { InventoryItem } from "./api/types";
+import { invalidateLibrary, useSuggestions, useVocabulary } from "./api/queries";
+import type { InventoryItem, Vocabulary } from "./api/types";
 import { AppShell } from "./components/AppShell";
 import { BrowseMode } from "./components/BrowseMode";
+import { ClassifyView } from "./components/ClassifyView";
 import { useConfirm } from "./components/ConfirmDialog";
 import { DetailPanel } from "./components/DetailPanel";
 import { FilterDropdown } from "./components/FilterDropdown";
 import { LibraryGrid } from "./components/LibraryGrid";
 import { LibraryTable } from "./components/LibraryTable";
-import { OrganizeMode } from "./components/OrganizeMode";
+import { MoveView } from "./components/MoveView";
+import { needsCategory, OrganizeMode, type OrganizeFilter } from "./components/OrganizeMode";
 import { ReviewQueue } from "./components/ReviewQueue";
+import { SettingsView } from "./components/SettingsView";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { categoryById, codesMatchQuery } from "./vocabulary";
 
-type ViewMode = "cover" | "table" | "review" | "organize" | "browse";
+type ViewMode =
+  | "cover"
+  | "table"
+  | "review"
+  | "organize"
+  | "browse"
+  | "classify"
+  | "move"
+  | "settings";
 
-export type FilterGroup = "primary" | "workType" | "quick" | "legacy" | "tags";
+export type FilterGroup = "primary" | "workType" | "quick" | "legacy" | "tags" | "codes";
 export type Filters = Record<FilterGroup, Set<string>>;
 
 export interface FilterOption {
   id: string;
   count: number;
 }
-
-export const PRIMARY_CATEGORIES = [
-  "Visual Novel",
-  "Action",
-  "RPG",
-  "Simulation",
-  "Strategy",
-  "3D",
-];
 
 const QUICK_FILTER_LABELS: Record<string, string> = {
   pending: "Pending",
@@ -70,10 +74,15 @@ function emptyFilters(): Filters {
     quick: new Set(),
     legacy: new Set(),
     tags: new Set(),
+    codes: new Set(),
   };
 }
 
-function matchesSearch(item: InventoryItem, query: string): boolean {
+function matchesSearch(
+  item: InventoryItem,
+  query: string,
+  vocab: Vocabulary | undefined,
+): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   const haystacks: (string | null | undefined)[] = [
@@ -87,10 +96,20 @@ function matchesSearch(item: InventoryItem, query: string): boolean {
   for (const h of haystacks) {
     if (h && h.toLowerCase().includes(q)) return true;
   }
-  for (const t of item.sourceTags ?? []) {
-    if (t.toLowerCase().includes(q)) return true;
+  for (const t of item.sourceTags) {
+    if (t.label.toLowerCase().includes(q)) return true;
+  }
+  if (codesMatchQuery(vocab, item.genreFacets, query)) return true;
+  const category = categoryById(vocab, item.primaryCategory);
+  if (category && (category.label.includes(query) || category.folderName.toLowerCase().includes(q))) {
+    return true;
   }
   return false;
+}
+
+/** Distinct source tag labels of an item; the same tag from two sources counts once. */
+function tagLabels(item: InventoryItem): string[] {
+  return [...new Set(item.sourceTags.map((t) => t.label))];
 }
 
 function matches(item: InventoryItem, f: Filters): boolean {
@@ -99,17 +118,8 @@ function matches(item: InventoryItem, f: Filters): boolean {
     return false;
   }
   if (f.legacy.size && !f.legacy.has(item.legacyLocation ?? "")) return false;
-  if (f.tags.size) {
-    const itemTags = item.sourceTags ?? [];
-    let any = false;
-    for (const t of itemTags) {
-      if (f.tags.has(t)) {
-        any = true;
-        break;
-      }
-    }
-    if (!any) return false;
-  }
+  if (f.tags.size && !tagLabels(item).some((t) => f.tags.has(t))) return false;
+  if (f.codes.size && !item.genreFacets.some((c) => f.codes.has(c))) return false;
   for (const q of f.quick) {
     if (q === "pending" && item.organizationStatus !== "pending") return false;
     if (q === "has-dlsite" && !item.dlsiteWorkId) return false;
@@ -181,6 +191,9 @@ export function App() {
 
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const vocab = useVocabulary();
+  const suggestions = useSuggestions().byWork;
+  const [organizeFilters, setOrganizeFilters] = useState<OrganizeFilter[] | undefined>();
   const query = useQuery({ queryKey: ["library"], queryFn: fetchLibrary, retry: false });
   const items = query.data?.items ?? [];
 
@@ -197,9 +210,9 @@ export function App() {
         ) {
           return false;
         }
-        return matches(i, filters) && matchesSearch(i, searchQuery);
+        return matches(i, filters) && matchesSearch(i, searchQuery, vocab);
       }),
-    [items, filters, searchQuery, showExcluded],
+    [items, filters, searchQuery, showExcluded, vocab],
   );
 
   const primaryOpts = useMemo(() => countByValue(items, (i) => i.primaryCategory), [items]);
@@ -208,7 +221,12 @@ export function App() {
     [items],
   );
   const legacyOpts = useMemo(() => countByValue(items, (i) => i.legacyLocation), [items]);
-  const tagsOpts = useMemo(() => countByList(items, (i) => i.sourceTags), [items]);
+  const tagsOpts = useMemo(() => countByList(items, tagLabels), [items]);
+  const codesOpts = useMemo(() => countByList(items, (i) => i.genreFacets), [items]);
+  const primaryLabels = useMemo(
+    () => Object.fromEntries((vocab?.categories ?? []).map((c) => [c.id, c.folderName])),
+    [vocab],
+  );
 
   const selectedItem = useMemo(
     () =>
@@ -231,14 +249,19 @@ export function App() {
     setScanning(true);
     try {
       await triggerScan();
-      await queryClient.invalidateQueries({ queryKey: ["library"] });
+      await invalidateLibrary(queryClient);
     } finally {
       setScanning(false);
     }
   };
 
   const handleMetadataConfirmed = () => {
-    queryClient.invalidateQueries({ queryKey: ["library"] });
+    void invalidateLibrary(queryClient);
+  };
+
+  const openOrganize = (filters?: OrganizeFilter[]) => {
+    setOrganizeFilters(filters);
+    setViewMode("organize");
   };
 
   const handleReviewItem = (item: InventoryItem) => {
@@ -249,7 +272,7 @@ export function App() {
   const handleSkipItem = async (item: InventoryItem) => {
     try {
       await skipInventoryItem(item.id);
-      queryClient.invalidateQueries({ queryKey: ["library"] });
+      void invalidateLibrary(queryClient);
     } catch (e) {
       console.error("skip failed", e);
     }
@@ -258,7 +281,7 @@ export function App() {
   const handleExcludeItem = async (item: InventoryItem) => {
     try {
       await excludeInventoryItem(item.id);
-      queryClient.invalidateQueries({ queryKey: ["library"] });
+      void invalidateLibrary(queryClient);
     } catch (e) {
       console.error("exclude failed", e);
     }
@@ -276,20 +299,22 @@ export function App() {
     if (!ok) return;
     try {
       await deleteAllMissing();
-      queryClient.invalidateQueries({ queryKey: ["library"] });
+      void invalidateLibrary(queryClient);
     } catch (e) {
       console.error("delete-missing failed", e);
     }
   };
 
   const pendingCount = items.filter((i) => i.organizationStatus === "pending").length;
-  // Mirrors OrganizeMode's default chip set (pending + needs-detail).
-  // Excluded / ignored items intentionally do not bump the badge.
+  // Mirrors OrganizeMode's default chip set (pending + needs-detail +
+  // needs-category). Excluded / ignored items intentionally do not bump it.
   const organizeCount = items.filter(
     (i) =>
       i.organizationStatus === "pending" ||
-      (i.organizationStatus === "confirmed" && !i.enrichedAt),
+      (i.organizationStatus === "confirmed" && !i.enrichedAt) ||
+      needsCategory(i, suggestions),
   ).length;
+  const classifyCount = [...suggestions.values()].filter((s) => s.confident).length;
 
   const isOrganize = viewMode === "organize";
   const isBrowse = viewMode === "browse";
@@ -298,7 +323,7 @@ export function App() {
     <AppShell
       chromeless={isOrganize}
       detail={
-        isOrganize || isBrowse ? null : (
+        isOrganize || isBrowse || viewMode === "settings" || viewMode === "move" ? null : (
           <DetailPanel
             item={selectedItem}
             autoSearchToken={autoSearchToken}
@@ -316,6 +341,7 @@ export function App() {
           onExclude={handleExcludeItem}
           onMetadataConfirmed={handleMetadataConfirmed}
           onExit={() => setViewMode("cover")}
+          initialFilters={organizeFilters}
         />
       ) : (
         <>
@@ -326,8 +352,8 @@ export function App() {
               className="topbar-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search title, filename, circle, tag, DLsite id"
-              placeholder="Search title, filename, circle, tag, or DLsite/VNDB ID"
+              aria-label="Search title, filename, circle, tag, genre code, DLsite id"
+              placeholder="Search title, filename, circle, tag, code (HAG), or DLsite/VNDB ID"
             />
             <button onClick={handleScan} disabled={scanning}>
               {scanning ? "Scanning..." : "Scan"}
@@ -360,8 +386,26 @@ export function App() {
               >
                 Review Queue{pendingCount > 0 ? ` (${pendingCount})` : ""}
               </button>
-              <button onClick={() => setViewMode("organize")}>
+              <button onClick={() => openOrganize()}>
                 Organize{organizeCount > 0 ? ` (${organizeCount})` : ""}
+              </button>
+              <button
+                className={viewMode === "classify" ? "active" : ""}
+                onClick={() => setViewMode("classify")}
+              >
+                Classify{classifyCount > 0 ? ` (${classifyCount})` : ""}
+              </button>
+              <button
+                className={viewMode === "move" ? "active" : ""}
+                onClick={() => setViewMode("move")}
+              >
+                Move
+              </button>
+              <button
+                className={viewMode === "settings" ? "active" : ""}
+                onClick={() => setViewMode("settings")}
+              >
+                Settings
               </button>
             </div>
             <div className="filters-bar-divider" />
@@ -370,6 +414,14 @@ export function App() {
               options={primaryOpts}
               selected={filters.primary}
               onToggle={(v) => toggleFilter("primary", v)}
+              labels={primaryLabels}
+            />
+            <FilterDropdown
+              label="Codes"
+              options={codesOpts}
+              selected={filters.codes}
+              onToggle={(v) => toggleFilter("codes", v)}
+              searchable
             />
             <FilterDropdown
               label="Work type"
@@ -439,6 +491,16 @@ export function App() {
           )}
           {viewMode === "review" && (
             <ReviewQueue items={items} onReview={handleReviewItem} />
+          )}
+          {viewMode === "settings" && <SettingsView />}
+          {viewMode === "move" && <MoveView />}
+          {viewMode === "classify" && (
+            <ClassifyView
+              items={items}
+              selectedId={selectedItem?.id ?? null}
+              onSelect={(item) => setSelectedId(item.id)}
+              onReviewRest={() => openOrganize(["needs-category"])}
+            />
           )}
           {viewMode === "browse" && (
             <BrowseMode

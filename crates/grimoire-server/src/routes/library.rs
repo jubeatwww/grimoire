@@ -8,14 +8,25 @@ use axum::{
 use serde::Serialize;
 use sqlx::Row;
 
+#[derive(Serialize, serde::Deserialize)]
+struct SourceTag {
+    label: String,
+    source: String,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LibraryItem {
     id: String,
     source_id: String,
+    path: String,
     file_name: String,
     legacy_location: Option<String>,
+    game_work_id: Option<String>,
+    /// Work-level category id (see `categories`); files inherit it.
     primary_category: Option<String>,
+    category_confirmed: bool,
+    /// Work-level genre codes.
     genre_facets: Vec<String>,
     organization_status: String,
     play_status: String,
@@ -30,7 +41,7 @@ struct LibraryItem {
     description: Option<String>,
     release_date: Option<chrono::NaiveDate>,
     series: Option<String>,
-    source_tags: Vec<String>,
+    source_tags: Vec<SourceTag>,
     preview_image_urls: Vec<String>,
     file_type: Option<String>,
     file_size_bytes: Option<i64>,
@@ -57,11 +68,17 @@ pub(crate) fn list_route() -> MethodRouter<AppState> {
 
 async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, StatusCode> {
     let rows = sqlx::query(
-        "SELECT i.id, i.source_id, i.file_name, i.legacy_location, i.primary_category,
-                i.genre_facets, i.organization_status, i.play_status, i.rating,
+        "SELECT i.id, i.source_id, i.path, i.file_name, i.legacy_location, i.game_work_id,
+                g.primary_category, g.category_confirmed_at IS NOT NULL AS category_confirmed,
+                g.genre_facets, i.organization_status, i.play_status, i.rating,
                 i.version, i.language, i.notes, i.missing,
                 g.display_title, g.cover_image_url, g.circle, g.description,
-                g.release_date, g.series, g.source_tags, g.preview_image_urls,
+                g.release_date, g.series, g.preview_image_urls,
+                (SELECT jsonb_agg(jsonb_build_object('label', t.label, 'source', s.source)
+                                  ORDER BY s.source, t.ord)
+                   FROM work_source_data s,
+                        jsonb_array_elements_text(s.tags) WITH ORDINALITY AS t(label, ord)
+                  WHERE s.game_work_id = g.id) AS source_tags,
                 g.file_type, g.file_size_bytes, g.dl_count, g.rate_average,
                 g.rate_count, g.price_jpy, g.work_type, g.work_type_label,
                 g.dlsite_work_id, g.vndb_id, g.steam_app_id, g.enriched_at
@@ -76,16 +93,25 @@ async fn list(State(state): State<AppState>) -> Result<Json<LibraryResponse>, St
     let items = rows
         .iter()
         .map(|row| {
-            let genre_facets: serde_json::Value = row.get("genre_facets");
+            let genre_facets: Option<serde_json::Value> = row.get("genre_facets");
             let source_tags: Option<serde_json::Value> = row.get("source_tags");
             let preview_urls: Option<serde_json::Value> = row.get("preview_image_urls");
             LibraryItem {
                 id: row.get::<uuid::Uuid, _>("id").to_string(),
                 source_id: row.get("source_id"),
+                path: row.get("path"),
                 file_name: row.get("file_name"),
                 legacy_location: row.get("legacy_location"),
+                game_work_id: row
+                    .get::<Option<uuid::Uuid>, _>("game_work_id")
+                    .map(|id| id.to_string()),
                 primary_category: row.get("primary_category"),
-                genre_facets: serde_json::from_value(genre_facets).unwrap_or_default(),
+                category_confirmed: row
+                    .get::<Option<bool>, _>("category_confirmed")
+                    .unwrap_or(false),
+                genre_facets: genre_facets
+                    .and_then(|v| serde_json::from_value(v).ok())
+                    .unwrap_or_default(),
                 organization_status: row.get("organization_status"),
                 play_status: row.get("play_status"),
                 rating: row.get("rating"),

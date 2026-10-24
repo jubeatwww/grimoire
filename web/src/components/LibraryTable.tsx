@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { useVocabulary } from "../api/queries";
 import type { InventoryItem } from "../api/types";
+import { categoryName } from "../vocabulary";
 
 type SortKey = "name" | "status" | "primary" | "circle" | "workType";
 
@@ -16,22 +18,31 @@ const STATUS_RANK: Record<string, number> = {
   ignored: 3,
 };
 
-function compare(a: InventoryItem, b: InventoryItem, key: SortKey, dir: 1 | -1): number {
-  const av = sortValue(a, key);
-  const bv = sortValue(b, key);
+/** Category id → folder sort order, so the Primary column sorts like the NAS. */
+type CategoryRank = (id: string) => number;
+
+function compare(
+  a: InventoryItem,
+  b: InventoryItem,
+  key: SortKey,
+  dir: 1 | -1,
+  rank: CategoryRank,
+): number {
+  const av = sortValue(a, key, rank);
+  const bv = sortValue(b, key, rank);
   if (av < bv) return -1 * dir;
   if (av > bv) return 1 * dir;
   return 0;
 }
 
-function sortValue(item: InventoryItem, key: SortKey): string | number {
+function sortValue(item: InventoryItem, key: SortKey, rank: CategoryRank): string | number {
   switch (key) {
     case "name":
       return (item.displayTitle ?? item.fileName).toLowerCase();
     case "status":
       return STATUS_RANK[item.organizationStatus] ?? 99;
     case "primary":
-      return (item.primaryCategory ?? "~").toLowerCase();
+      return item.primaryCategory ? rank(item.primaryCategory) : Number.MAX_SAFE_INTEGER;
     case "circle":
       return ((item.displayTitle ? "" : "~") + (item.fileName)).toLowerCase();
     case "workType":
@@ -42,8 +53,11 @@ function sortValue(item: InventoryItem, key: SortKey): string | number {
 export function LibraryTable({ items, selectedId, onSelect }: LibraryTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const vocab = useVocabulary();
+  const rank: CategoryRank = (id) =>
+    vocab?.categories.find((c) => c.id === id)?.sortOrder ?? Number.MAX_SAFE_INTEGER - 1;
 
-  const sorted = [...items].sort((a, b) => compare(a, b, sortKey, sortDir));
+  const sorted = [...items].sort((a, b) => compare(a, b, sortKey, sortDir, rank));
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === 1 ? -1 : 1));
@@ -75,7 +89,7 @@ export function LibraryTable({ items, selectedId, onSelect }: LibraryTableProps)
               <button onClick={() => handleSort("workType")}>Type{arrow("workType")}</button>
             </th>
             <th>Legacy</th>
-            <th>Facets</th>
+            <th>Codes</th>
           </tr>
         </thead>
         <tbody>
@@ -101,7 +115,15 @@ export function LibraryTable({ items, selectedId, onSelect }: LibraryTableProps)
                   {item.organizationStatus}
                 </span>
               </td>
-              <td>{item.primaryCategory ?? <em>Unsorted</em>}</td>
+              <td>
+                {item.primaryCategory ? (
+                  <span className={item.categoryConfirmed ? "" : "unconfirmed"}>
+                    {categoryName(vocab, item.primaryCategory)}
+                  </span>
+                ) : (
+                  <em>Unsorted</em>
+                )}
+              </td>
               <td>
                 {item.workTypeLabel || item.workType ? (
                   <span className="work-type-pill" title={item.workType ?? undefined}>

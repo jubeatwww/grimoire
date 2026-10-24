@@ -1,11 +1,15 @@
 pub mod assets;
+pub mod classification;
 pub mod download;
 pub mod export;
 pub mod health;
 pub mod library;
 pub mod metadata;
+pub mod organize;
+pub mod refetch;
 pub mod scan;
 pub mod staging;
+pub mod vocabulary;
 
 use crate::state::AppState;
 use axum::{
@@ -24,6 +28,10 @@ pub fn router(state: AppState) -> Router {
         .nest("/api/staging", staging::router())
         .nest("/api/export", export::router())
         .nest("/api/assets", assets::router())
+        .nest("/api/vocabulary", vocabulary::router())
+        .nest("/api/classification", classification::router())
+        .nest("/api/sources", refetch::router())
+        .nest("/api/organize", organize::router())
         .with_state(state)
 }
 
@@ -83,6 +91,8 @@ mod tests {
             db,
             library_root: StorageRoot::new("/mnt/games"),
             asset_cache_root: std::path::PathBuf::from("/tmp/grimoire-assets"),
+            refetch: Default::default(),
+            library_lock: Default::default(),
         })
     }
 }

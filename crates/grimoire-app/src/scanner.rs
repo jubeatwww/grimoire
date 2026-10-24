@@ -125,3 +125,125 @@ fn legacy_location(root: &Path, path: &Path) -> Option<String> {
         .and_then(|component| component.as_os_str().to_str())
         .map(ToOwned::to_owned)
 }
+
+/// One line of the "other files" report: a file the scanner ignores, or a
+/// whole directory whose subtree holds no zip or rar.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OtherEntry {
+    /// Relative to the library root, `/`-separated.
+    pub path: String,
+    pub is_dir: bool,
+    pub files: u64,
+    pub bytes: u64,
+}
+
+fn is_archive(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("zip") || e.eq_ignore_ascii_case("rar"))
+}
+
+/// Everything under `root` that is not a zip or rar, for the read-only report.
+/// `exclude` holds absolute folders to leave out entirely (the asset cache).
+pub fn report_other_files(root: &Path, exclude: &[PathBuf]) -> anyhow::Result<Vec<OtherEntry>> {
+    use std::collections::{BTreeMap, HashSet};
+
+    let mut archive_dirs: HashSet<PathBuf> = HashSet::new();
+    let mut others: Vec<(PathBuf, u64)> = Vec::new();
+    for entry in WalkDir::new(root)
+        .min_depth(1)
+        .into_iter()
+        .filter_entry(|e| !is_skipped(e) && !exclude.iter().any(|x| e.path() == x))
+    {
+        let Ok(entry) = entry else { continue };
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy();
+        if crate::library_writer::is_metadata_file_name(&name) {
+            continue;
+        }
+        if is_archive(path) {
+            for dir in path.ancestors().skip(1) {
+                if dir == root || !archive_dirs.insert(dir.to_path_buf()) {
+                    break;
+                }
+            }
+        } else {
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            others.push((path.to_path_buf(), size));
+        }
+    }
+
+    let rel = |p: &Path| {
+        p.strip_prefix(root)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    let mut grouped: BTreeMap<String, OtherEntry> = BTreeMap::new();
+    for (path, size) in others {
+        // The top-most folder below the root without any archive in it.
+        let ancestors: Vec<&Path> = path
+            .ancestors()
+            .skip(1)
+            .take_while(|d| *d != root)
+            .collect();
+        let collapse = ancestors
+            .iter()
+            .rev()
+            .find(|d| !archive_dirs.contains(**d))
+            .copied();
+        let (key, is_dir) = match collapse {
+            Some(dir) => (rel(dir), true),
+            None => (rel(&path), false),
+        };
+        let entry = grouped.entry(key.clone()).or_insert(OtherEntry {
+            path: key,
+            is_dir,
+            files: 0,
+            bytes: 0,
+        });
+        entry.files += 1;
+        entry.bytes += size;
+    }
+    Ok(grouped.into_values().collect())
+}
+
+#[cfg(test)]
+mod other_files_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn collapses_archive_free_folders_and_lists_loose_files() {
+        let root = std::env::temp_dir().join(format!("grimoire-other-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let write = |rel: &str, bytes: usize| {
+            let p = root.join(rel);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(p, vec![0u8; bytes]).unwrap();
+        };
+        write("RPG/game.zip", 1);
+        write("RPG/readme.txt", 3);
+        write("RPG/Extracted Game/Game.exe", 10);
+        write("RPG/Extracted Game/data/a.dat", 5);
+        write("RPG/.DS_Store", 1);
+        write("Tools/tool.7z", 7);
+        write("cache/cover.jpg", 2);
+        write("#recycle/old.iso", 9);
+
+        let entries = report_other_files(&root, &[root.join("cache")]).unwrap();
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(
+            entries,
+            vec![
+                OtherEntry { path: "RPG/Extracted Game".into(), is_dir: true, files: 2, bytes: 15 },
+                OtherEntry { path: "RPG/readme.txt".into(), is_dir: false, files: 1, bytes: 3 },
+                OtherEntry { path: "Tools".into(), is_dir: true, files: 1, bytes: 7 },
+            ]
+        );
+    }
+}

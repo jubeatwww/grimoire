@@ -1,4 +1,6 @@
+import { useVocabulary } from "../api/queries";
 import type { InventoryItem } from "../api/types";
+import { categoryName } from "../vocabulary";
 import { useImagePreview } from "./useImagePreview";
 
 interface LibraryGridProps {
@@ -9,6 +11,7 @@ interface LibraryGridProps {
 
 export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
   const { hoverProps, preview } = useImagePreview();
+  const vocab = useVocabulary();
   return (
     <div className="library-grid">
       {items.map((item, index) => (
@@ -39,7 +42,10 @@ export function LibraryGrid({ items, selectedId, onSelect }: LibraryGridProps) {
             </div>
           )}
           <strong>{item.displayTitle ?? item.fileName}</strong>
-          <small>{item.primaryCategory ?? "Unsorted"} · {item.legacyLocation ?? "no legacy"}</small>
+          <small>
+            {item.primaryCategory && "★ "}
+            {categoryName(vocab, item.primaryCategory)} · {item.legacyLocation ?? "no legacy"}
+          </small>
           <div className="mini-tags">
             {item.genreFacets.map((facet) => <span key={facet}>{facet}</span>)}
           </div>

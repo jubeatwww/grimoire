@@ -1,4 +1,4 @@
-use crate::state::AppState;
+use crate::{repo, sources::Src, state::AppState};
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use grimoire_app::{
     dlsite::DlsiteSource,
@@ -20,47 +20,10 @@ pub fn router() -> Router<AppState> {
         .route("/link", post(link))
         .route("/reset", post(reset))
         .route("/edit-work", post(edit_work))
-        .route("/edit-item", post(edit_item))
         .route("/manual", post(manual))
         .route("/delete-item", post(delete_item))
         .route("/delete-missing", post(delete_missing))
         .route("/delete-item-and-file", post(delete_item_and_file))
-}
-
-// ---- source dispatch ------------------------------------------------------
-
-#[derive(Debug, Clone, Copy)]
-enum Src {
-    Dlsite,
-    Vndb,
-    Steam,
-}
-
-impl Src {
-    fn from_name(s: &str) -> Option<Self> {
-        match s {
-            "dlsite" => Some(Self::Dlsite),
-            "vndb" => Some(Self::Vndb),
-            "steam" => Some(Self::Steam),
-            _ => None,
-        }
-    }
-
-    async fn fetch_detail(&self, id: &str) -> anyhow::Result<Option<ProductDetail>> {
-        match self {
-            Self::Dlsite => DlsiteSource::new().fetch_product_detail(id).await,
-            Self::Vndb => VndbSource::new().fetch_product_detail(id).await,
-            Self::Steam => SteamSource::new().fetch_product_detail(id).await,
-        }
-    }
-}
-
-fn source_url_for(src: Src, id: &str) -> String {
-    match src {
-        Src::Dlsite => format!("https://www.dlsite.com/maniax/work/=/product_id/{id}.html"),
-        Src::Vndb => format!("https://vndb.org/{id}"),
-        Src::Steam => format!("https://store.steampowered.com/app/{id}/"),
-    }
 }
 
 /// Auto-detect which source a raw user-pasted input belongs to. Order matters
@@ -152,9 +115,15 @@ async fn insert_game_work(
 async fn apply_detail(
     db: &PgPool,
     game_work_id: Uuid,
+    src: Src,
     detail: ProductDetail,
     overwrite: bool,
 ) -> Result<(), StatusCode> {
+    // Keep this source's raw tags / work type before the shared columns below
+    // get overwritten by whichever source was applied last.
+    repo::upsert_source_data(db, game_work_id, src, &detail)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tags_json = serde_json::json!(detail.tags);
     let previews_json = serde_json::json!(detail.preview_image_urls);
     let result = if overwrite {
@@ -540,31 +509,6 @@ async fn manual(
     }))
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct EditItemRequest {
-    inventory_item_id: Uuid,
-    primary_category: Option<String>,
-}
-
-async fn edit_item(
-    State(state): State<AppState>,
-    Json(body): Json<EditItemRequest>,
-) -> Result<StatusCode, StatusCode> {
-    sqlx::query(
-        "UPDATE inventory_items SET
-            primary_category = CASE WHEN $1::text IS NULL THEN primary_category ELSE NULLIF($1, '') END,
-            updated_at       = now()
-          WHERE id = $2",
-    )
-    .bind(body.primary_category)
-    .bind(body.inventory_item_id)
-    .execute(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
 // ---- search ---------------------------------------------------------------
 
 #[derive(Deserialize)]
@@ -729,7 +673,7 @@ async fn confirm(
 
     // Best-effort enrichment; failure doesn't block confirm.
     if let Ok(Some(detail)) = src.fetch_detail(&source_work_id).await {
-        apply_detail(&state.db, game_work_id, detail, false).await?;
+        apply_detail(&state.db, game_work_id, src, detail, false).await?;
     }
 
     link_inventory_to_work(&state.db, body.inventory_item_id, game_work_id).await?;
@@ -784,7 +728,7 @@ async fn refresh(
         Err(_) => return Err(StatusCode::BAD_GATEWAY),
     };
 
-    apply_detail(&state.db, game_work_id, detail, true).await?;
+    apply_detail(&state.db, game_work_id, src, detail, true).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -810,7 +754,7 @@ async fn link(
         Err(_) => return Err(StatusCode::BAD_GATEWAY),
     };
 
-    let source_url = source_url_for(src, &external_id);
+    let source_url = src.source_url(&external_id);
     let title = detail
         .work_name
         .clone()
@@ -824,7 +768,7 @@ async fn link(
         }
     };
 
-    apply_detail(&state.db, game_work_id, detail, true).await?;
+    apply_detail(&state.db, game_work_id, src, detail, true).await?;
     link_inventory_to_work(&state.db, body.inventory_item_id, game_work_id).await?;
 
     Ok(Json(ConfirmResponse {

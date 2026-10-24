@@ -1,20 +1,21 @@
-import { PRIMARY_CATEGORIES } from "../App";
 import { useEffect, useRef, useState } from "react";
 import {
   createManualEntry,
   deleteInventoryItem,
   deleteItemAndFile,
   downloadUrl,
-  editInventoryItem,
   editWork,
   excludeInventoryItem,
   refreshMetadata,
   resetInventoryItem,
 } from "../api/client";
+import { useVocabulary } from "../api/queries";
 import type { InventoryItem } from "../api/types";
+import { ClassificationEditor } from "./ClassificationEditor";
 import { useConfirm } from "./ConfirmDialog";
 import { CoverEditor } from "./CoverEditor";
 import { InlineText } from "./InlineText";
+import { CategoryPill, SourceTagPill } from "./Pills";
 import { SamplesEditor } from "./SamplesEditor";
 
 interface ItemFocusProps {
@@ -39,6 +40,7 @@ function formatBytes(n: number): string {
 
 export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
   const confirm = useConfirm();
+  const vocab = useVocabulary();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -167,11 +169,6 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
     onChanged?.();
   };
 
-  const savePrimaryCategory = async (next: string) => {
-    await editInventoryItem(item.id, { primaryCategory: next });
-    onChanged?.();
-  };
-
   const hasGameWork = item.displayTitle != null;
   const isManualEntry =
     item.organizationStatus === "confirmed" &&
@@ -265,17 +262,11 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
             </span>
           )
         )}
-        <select
-          className="primary-select"
-          value={item.primaryCategory ?? ""}
-          onChange={(e) => void savePrimaryCategory(e.target.value)}
-          title="Primary category"
-        >
-          <option value="">Unsorted</option>
-          {PRIMARY_CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <CategoryPill
+          categoryId={item.primaryCategory}
+          confirmed={item.categoryConfirmed}
+          vocab={vocab}
+        />
         {item.fileType && <span>· {item.fileType}</span>}
         {item.fileSizeBytes != null && (
           <span>· {formatBytes(item.fileSizeBytes)}</span>
@@ -291,10 +282,11 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
           )}
         </p>
       )}
-      {item.sourceTags && item.sourceTags.length > 0 && (
+      <ClassificationEditor item={item} onChanged={onChanged} />
+      {item.sourceTags.length > 0 && (
         <div className="detail-tags">
           {item.sourceTags.map((t) => (
-            <span key={t} className="detail-tag">{t}</span>
+            <SourceTagPill key={`${t.source}:${t.label}`} tag={t} />
           ))}
         </div>
       )}
@@ -321,6 +313,8 @@ export function ItemFocus({ item, onChanged, hideMedia }: ItemFocusProps) {
             <dd>{item.series}</dd>
           </>
         )}
+        <dt>Path</dt>
+        <dd className="detail-path">{item.path}</dd>
         <dt>Legacy location</dt>
         <dd>{item.legacyLocation ?? "none"}</dd>
         <dt>Version</dt>

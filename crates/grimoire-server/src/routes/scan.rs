@@ -10,9 +10,11 @@ pub(crate) struct ScanResponse {
     warnings: Vec<String>,
 }
 
-const SOURCE_ID: &str = "local";
+pub(crate) const SOURCE_ID: &str = "local";
 
 pub(crate) async fn scan(State(state): State<AppState>) -> Result<Json<ScanResponse>, StatusCode> {
+    // Never scan while files are being moved.
+    let _lock = state.library_lock.lock().await;
     let options = ScanOptions {
         source_id: SOURCE_ID.to_string(),
         root: state.library_root.root().to_path_buf(),
