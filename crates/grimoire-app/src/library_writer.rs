@@ -299,20 +299,21 @@ impl PruneGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct TempDir(PathBuf);
 
     impl TempDir {
         fn new() -> Self {
+            // A counter, not the clock: macOS clocks tick in microseconds, so
+            // tests running in parallel could share a directory.
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
             let dir = std::env::temp_dir().join(format!(
                 "grimoire-writer-{}-{}",
                 std::process::id(),
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
+                NEXT.fetch_add(1, Ordering::Relaxed)
             ));
+            let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();
             Self(dir)
         }
