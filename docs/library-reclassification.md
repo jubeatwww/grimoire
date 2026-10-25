@@ -77,16 +77,25 @@ Resolved differences from the user's first draft:
 
 ### Variant codes
 
-- The `T-` prefix means touch interaction. The `X-` prefix means partial or
-  cross-section view. Both apply only to the 動畫支向 codes HAG, HAG², HAG³,
-  HAG⁴, HAP, HAP² and LS.
+A stored code is `[prefix]<code>[level]`.
+
+- **Level.** Any code takes a level from ² to ⁹, for example `SSG³`. Real
+  works use levels outside 動畫支向, so levels are not limited to the codes the
+  forum lists with one. The forum's named levels (HAG² 動漫風3D動畫, HAG³
+  寫實動畫, HAG⁴ AI擬真動畫, HAP² 像素動畫) stay as rows with their own label
+  and win over the generic reading. Any other level is shown as the base
+  label plus the superscript, for example 隱蔽潛行³. Adding a row such as
+  `SSG³` in Settings gives that level a name; it joins the SSG family.
+- **Prefix.** `T-` means touch interaction and `X-` means partial or
+  cross-section view. They apply only to codes marked as accepting a prefix:
+  the 動畫支向 codes HAG, HAP and LS and their levels. Settings can mark more.
+- Prefix and level combine, for example `T-HAG³`.
 - `T-RPG` is its own code in 策略模擬. It is not "touch RPG". Exact codes are
-  matched before prefix parsing.
-- Codes are stored as the forum writes them, for example `T-HAG` and `HAG²`.
-  Input accepts plain digits, so `HAG2` becomes `HAG²` and `t-hag3` becomes
-  `T-HAG³`.
-- Each code has a family. HAG² and T-HAG belong to the HAG family. Searching
-  `HAG` matches the whole family.
+  matched before prefix and level parsing.
+- Codes are stored as the forum writes them. Input accepts plain digits, so
+  `HAG2` becomes `HAG²` and `t-hag3` becomes `T-HAG³`.
+- Each code has a family. HAG², T-HAG and HAG³ belong to the HAG family, and
+  SSG³ to SSG. Searching `HAG` matches the whole family.
 
 ## Tags
 
@@ -218,9 +227,10 @@ unclassified works so the real keyword list can be filled in from data.
 - **Organize queue.** A new "Needs category" filter holds works whose
   suggestion is not confident. The item panel shows the suggestion, its
   reasons, a category picker and the code pills, prefilled from the
-  suggestion. The code picker lists the T- and X- forms of the codes that
-  accept them. Adding a code to an empty list also sets the primary category
-  to that code's category.
+  suggestion. The code picker lists each code once. Clicking a code pill
+  opens its Prefix and Level toggles; combinations the vocabulary does not
+  accept are disabled. Adding a code to an empty list also sets the primary
+  category to that code's category.
 - Any manual change of category or codes counts as confirmation.
 - Confirming does not move files.
 
@@ -340,8 +350,8 @@ New migrations, one per phase:
   - Adds a foreign key from `game_works.primary_category` to `categories`.
 - **`0009_classification_rules.sql`.** Adds `work_type_rules` and
   `keyword_rules`, with the seed data above. Rule codes are validated by the
-  API instead of a foreign key, because variant codes such as T-HAG are not
-  rows of `genre_codes`.
+  API instead of a foreign key, because variant codes such as T-HAG and SSG³
+  are not rows of `genre_codes`.
 - **`0010_move_batches.sql`.** Adds `move_batches` and `move_ops`.
 
 `game_works.source_tags` is no longer read and stays only as a backup until a

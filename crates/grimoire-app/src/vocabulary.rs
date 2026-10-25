@@ -3,9 +3,13 @@
 //!
 //! Codes are stored exactly as the forum writes them (`T-HAG`, `HAG²`). Input
 //! is forgiving: case is ignored, trailing ASCII digits become superscripts
-//! (`hag2` → `HAG²`) and aliases resolve to their code (`H-ERG` → `ERG`). The
-//! `T-` / `X-` prefixes only combine with codes that accept them, so `T-RPG`
-//! stays its own 策略模擬 code instead of becoming "touch RPG".
+//! (`hag2` → `HAG²`) and aliases resolve to their code (`H-ERG` → `ERG`).
+//!
+//! A stored code is `[prefix]<code>[level]`. Any code takes a ² to ⁹ level
+//! (`SSG³`); a level the forum names has its own row (`HAG²` 動漫風3D動畫),
+//! which wins over the generic reading. The `T-` / `X-` prefixes only combine
+//! with codes that accept them, so `T-RPG` stays its own 策略模擬 code instead
+//! of becoming "touch RPG".
 
 use serde::{Deserialize, Serialize};
 
@@ -38,16 +42,24 @@ pub struct Vocabulary {
     codes: Vec<CodeDef>,
 }
 
-/// A stored code split into its optional variant prefix and its base entry.
+/// A stored code split into its optional variant prefix, its base entry and
+/// an optional level the base row does not spell out itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedCode<'a> {
     pub prefix: Option<&'static str>,
     pub base: &'a CodeDef,
+    pub level: Option<u8>,
 }
 
 impl ResolvedCode<'_> {
     pub fn canonical(&self) -> String {
-        format!("{}{}", self.prefix.unwrap_or(""), self.base.code)
+        let level = self
+            .level
+            .and_then(|l| char::from_digit(u32::from(l), 10))
+            .map(superscript_digit);
+        let mut out = format!("{}{}", self.prefix.unwrap_or(""), self.base.code);
+        out.extend(level);
+        out
     }
 }
 
@@ -74,24 +86,35 @@ impl Vocabulary {
         })
     }
 
+    /// A code without its prefix: a row of its own, or a row plus a level.
+    fn resolve_stem(&self, key: &str) -> Option<(&CodeDef, Option<u8>)> {
+        if let Some(base) = self.exact(key) {
+            return Some((base, None));
+        }
+        let (head, level) = split_level(key)?;
+        Some((self.exact(head)?, Some(level)))
+    }
+
     /// Resolve user input or a stored code against the vocabulary.
     pub fn resolve(&self, input: &str) -> Option<ResolvedCode<'_>> {
         let key = canonical_form(input);
         if key.is_empty() {
             return None;
         }
-        if let Some(base) = self.exact(&key) {
-            return Some(ResolvedCode { prefix: None, base });
+        if let Some((base, level)) = self.resolve_stem(&key) {
+            return Some(ResolvedCode {
+                prefix: None,
+                base,
+                level,
+            });
         }
         for prefix in VARIANT_PREFIXES {
             if let Some(rest) = key.strip_prefix(prefix) {
-                let base = self
-                    .codes
-                    .iter()
-                    .find(|c| c.accepts_prefix && c.code.to_uppercase() == rest)?;
-                return Some(ResolvedCode {
+                let (base, level) = self.resolve_stem(rest)?;
+                return base.accepts_prefix.then_some(ResolvedCode {
                     prefix: Some(prefix),
                     base,
+                    level,
                 });
             }
         }
@@ -194,6 +217,28 @@ pub fn canonical_form(input: &str) -> String {
         }
         _ => upper,
     }
+}
+
+/// Split a single trailing ² to ⁹ off a code: `SSG³` → (`SSG`, 3).
+fn split_level(key: &str) -> Option<(&str, u8)> {
+    let last = key.chars().next_back()?;
+    let level = match last {
+        '²' => 2,
+        '³' => 3,
+        '⁴' => 4,
+        '⁵' => 5,
+        '⁶' => 6,
+        '⁷' => 7,
+        '⁸' => 8,
+        '⁹' => 9,
+        _ => return None,
+    };
+    let head = &key[..key.len() - last.len_utf8()];
+    let head_ends_in_level = head
+        .chars()
+        .next_back()
+        .is_some_and(|c| "⁰¹²³⁴⁵⁶⁷⁸⁹".contains(c));
+    (!head.is_empty() && !head_ends_in_level).then_some((head, level))
 }
 
 fn superscript_digit(ch: char) -> char {
@@ -319,6 +364,42 @@ pub(crate) mod tests {
         assert_eq!(v.family_of("T-HAG²"), Some("HAG"));
         assert_eq!(v.category_of("X-HAP"), Some("HAG"));
         assert_eq!(v.family_of("HAP"), Some("HAP"));
+    }
+
+    #[test]
+    fn any_code_takes_a_level() {
+        let v = sample();
+        assert_eq!(v.normalize("rpg3").as_deref(), Some("RPG³"));
+        assert_eq!(v.category_of("RPG³"), Some("RPG"));
+        assert_eq!(v.family_of("RPG³"), Some("RPG"));
+        assert_eq!(v.normalize("h-erg4").as_deref(), Some("ERG⁴"));
+        assert_eq!(v.normalize("t-rpg2").as_deref(), Some("T-RPG²"));
+    }
+
+    #[test]
+    fn named_levels_win_over_the_generic_reading() {
+        let v = sample();
+        let named = v.resolve("HAG²").unwrap();
+        assert_eq!((named.base.code.as_str(), named.level), ("HAG²", None));
+        let generic = v.resolve("HAG³").unwrap();
+        assert_eq!((generic.base.code.as_str(), generic.level), ("HAG", Some(3)));
+    }
+
+    #[test]
+    fn prefixes_and_levels_combine() {
+        let v = sample();
+        assert_eq!(v.normalize("t-hap3").as_deref(), Some("T-HAP³"));
+        assert_eq!(v.family_of("X-HAG⁴"), Some("HAG"));
+        assert_eq!(v.normalize("T-EDU2"), None);
+    }
+
+    #[test]
+    fn rejects_levels_outside_two_to_nine() {
+        let v = sample();
+        assert_eq!(v.normalize("RPG1"), None);
+        assert_eq!(v.normalize("RPG0"), None);
+        assert_eq!(v.normalize("RPG23"), None);
+        assert_eq!(v.normalize("HAG²3"), None);
     }
 
     #[test]

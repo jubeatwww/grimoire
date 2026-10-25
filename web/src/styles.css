@@ -2068,6 +2068,16 @@ button.chip.chip-on .chip-count {
   opacity: .7;
 }
 .code-pill-remove:hover { opacity: 1; }
+.code-pill-select {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.code-pill-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .category-pill {
   display: inline-block;
@@ -2134,6 +2144,36 @@ button.chip.chip-on .chip-count {
   font-size: 11px;
 }
 .classify-code-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-style: solid; }
+.code-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.code-modifiers-current strong { color: var(--text); }
+.code-modifier-group { display: inline-flex; align-items: center; gap: 2px; }
+.code-modifier-name { margin-right: 4px; }
+.code-modifier-group button {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.code-modifier-group button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.code-modifier-group button:disabled { opacity: .35; cursor: default; }
+/* Superscript glyphs render tiny at the base size. */
+.code-modifier-group[aria-label="Level"] button { font-size: 17px; line-height: 1; }
 .classify-error, .settings-error { margin: 0; color: var(--error); font-size: 12px; }
 .classify-hint { margin: 0 0 12px; font-size: 12px; color: var(--text-muted); }
 

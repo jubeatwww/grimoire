@@ -9,7 +9,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use grimoire_app::vocabulary::{canonical_form, CategoryDef, CodeDef, VARIANT_PREFIXES};
+use grimoire_app::vocabulary::{canonical_form, CategoryDef, CodeDef};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -57,16 +57,12 @@ async fn upsert_code(
     if code.is_empty() || label.is_empty() {
         return Err(ApiError::bad_request("code and label are required"));
     }
-    if VARIANT_PREFIXES.iter().any(|p| code.starts_with(p)) {
-        let vocab = repo::load_vocabulary(&state.db).await?;
-        let collides = vocab
-            .resolve(&code)
-            .is_some_and(|r| r.prefix.is_some());
-        if collides {
-            return Err(ApiError::conflict(format!(
-                "{code} already means a T-/X- variant of an existing code"
-            )));
-        }
+    let vocab = repo::load_vocabulary(&state.db).await?;
+    let existing = vocab.resolve(&code);
+    if existing.is_some_and(|r| r.prefix.is_some()) {
+        return Err(ApiError::conflict(format!(
+            "{code} already means a T-/X- variant of an existing code"
+        )));
     }
     let category_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1)")
@@ -79,11 +75,15 @@ async fn upsert_code(
             body.category_id
         )));
     }
+    // A named level (SSG³) joins the family of the code it levels.
+    let default_family = existing
+        .filter(|r| r.level.is_some())
+        .map_or_else(|| code.clone(), |r| r.base.family.clone());
     let family = body
         .family
         .map(|f| canonical_form(&f))
         .filter(|f| !f.is_empty())
-        .unwrap_or_else(|| code.clone());
+        .unwrap_or(default_family);
     let aliases: Vec<String> = body
         .aliases
         .iter()
@@ -140,28 +140,31 @@ async fn delete_code(
             "{code} is a category's own code and cannot be removed"
         )));
     }
-    let variants: Vec<String> = std::iter::once(code.clone())
-        .chain(VARIANT_PREFIXES.iter().map(|p| format!("{p}{code}")))
-        .collect();
-    let in_use: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM game_works WHERE genre_facets ?| $1)",
+    // Stored codes may carry a prefix or a level, so match them through the
+    // vocabulary rather than by spelling.
+    let vocab = repo::load_vocabulary(&state.db).await?;
+    let uses_code = |stored: &[String]| {
+        stored
+            .iter()
+            .any(|s| vocab.resolve(s).is_some_and(|r| r.base.code == code))
+    };
+    let facets: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT jsonb_array_elements_text(genre_facets) FROM game_works",
     )
-    .bind(&variants)
-    .fetch_one(&state.db)
+    .fetch_all(&state.db)
     .await?;
-    if in_use {
+    if uses_code(&facets) {
         return Err(ApiError::conflict(format!(
             "{code} is still used by at least one game"
         )));
     }
-    let in_rules: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM work_type_rules WHERE code = ANY($1))
-             OR EXISTS (SELECT 1 FROM keyword_rules WHERE code = ANY($1))",
+    let rule_codes: Vec<String> = sqlx::query_scalar(
+        "SELECT code FROM work_type_rules WHERE code IS NOT NULL
+         UNION SELECT code FROM keyword_rules",
     )
-    .bind(&variants)
-    .fetch_one(&state.db)
+    .fetch_all(&state.db)
     .await?;
-    if in_rules {
+    if uses_code(&rule_codes) {
         return Err(ApiError::conflict(format!(
             "{code} is still used by a classification rule"
         )));

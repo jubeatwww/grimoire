@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { confirmClassification } from "../api/client";
 import { useSuggestions, useVocabulary } from "../api/queries";
-import type { InventoryItem, Suggestion } from "../api/types";
-import { categoryById, codeOptions, resolveCode } from "../vocabulary";
+import type { InventoryItem, Suggestion, Vocabulary } from "../api/types";
+import {
+  categoryById,
+  codeOptions,
+  codeParts,
+  codeTitle,
+  composeCode,
+  LEVEL_CHOICES,
+  resolveCode,
+  superscript,
+  VARIANT_PREFIXES,
+  type CodeParts,
+} from "../vocabulary";
 import { CategoryPill, CodePill } from "./Pills";
 
 interface ClassificationEditorProps {
@@ -25,6 +36,64 @@ function initialState(item: InventoryItem, suggestion: Suggestion | undefined) {
   return { category: item.primaryCategory ?? "", codes: item.genreFacets };
 }
 
+interface ModifierChoice {
+  key: string;
+  label: string;
+  code: string | null;
+}
+
+/** Prefix and level toggles for one code; choices that do not combine with
+ *  the code are disabled. */
+function CodeModifiers({
+  code,
+  vocab,
+  onChange,
+}: {
+  code: string;
+  vocab: Vocabulary;
+  onChange: (next: string) => void;
+}) {
+  const parts = codeParts(vocab, code);
+  if (!parts) return null;
+  const choice = (key: string, label: string, next: CodeParts): ModifierChoice => ({
+    key,
+    label,
+    code: composeCode(vocab, next),
+  });
+  const prefixes = (["", ...VARIANT_PREFIXES] as const).map((prefix) =>
+    choice(prefix || "none", prefix || "—", { ...parts, prefix }),
+  );
+  const levels = [null, ...LEVEL_CHOICES].map((level) =>
+    choice(String(level), level ? superscript(level) : "—", { ...parts, level }),
+  );
+  const group = (name: string, choices: ModifierChoice[]) => (
+    <span className="code-modifier-group" role="group" aria-label={name}>
+      <span className="code-modifier-name">{name}</span>
+      {choices.map((c) => (
+        <button
+          type="button"
+          key={c.key}
+          disabled={!c.code}
+          aria-pressed={c.code === code}
+          title={c.code ? codeTitle(vocab, c.code) : undefined}
+          onClick={() => c.code && c.code !== code && onChange(c.code)}
+        >
+          {c.label}
+        </button>
+      ))}
+    </span>
+  );
+  return (
+    <div className="code-modifiers">
+      <span className="code-modifiers-current">
+        <strong>{code}</strong> {codeTitle(vocab, code)}
+      </span>
+      {prefixes.some((c) => c.key !== "none" && c.code) && group("Prefix", prefixes)}
+      {group("Level", levels)}
+    </div>
+  );
+}
+
 /**
  * Primary category picker plus genre-code pills for the item's work. Saving
  * always confirms the classification. The category applies to every file of
@@ -38,6 +107,8 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
   const [category, setCategory] = useState(() => initialState(item, suggestion).category);
   const [codes, setCodes] = useState<string[]>(() => initialState(item, suggestion).codes);
   const [draft, setDraft] = useState("");
+  // The pill whose prefix and level are being edited.
+  const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -48,6 +119,7 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
     setCategory(init.category);
     setCodes(init.codes);
     setDraft("");
+    setSelected(null);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, item.primaryCategory, facetsKey, suggestionKey]);
@@ -75,6 +147,7 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
     // The first code also sets the primary category to the one it belongs to.
     if (codes.length === 0) setCategory(resolved.base.categoryId);
     setCodes((prev) => (prev.includes(resolved.canonical) ? prev : [...prev, resolved.canonical]));
+    setSelected(resolved.canonical);
     setDraft("");
     setError(null);
   };
@@ -96,6 +169,13 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
     } finally {
       setSaving(false);
     }
+  };
+
+  const replaceCode = (from: string, to: string) => {
+    setCodes((prev) =>
+      prev.includes(to) ? prev.filter((c) => c !== from) : prev.map((c) => (c === from ? to : c)),
+    );
+    setSelected(to);
   };
 
   const canSave = !saving && (dirty || (!item.categoryConfirmed && category !== ""));
@@ -162,6 +242,8 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
             key={code}
             code={code}
             vocab={vocab}
+            selected={code === selected}
+            onSelect={() => setSelected((prev) => (prev === code ? null : code))}
             onRemove={() => setCodes((prev) => prev.filter((c) => c !== code))}
           />
         ))}
@@ -188,6 +270,13 @@ export function ClassificationEditor({ item, onChanged }: ClassificationEditorPr
           ))}
         </datalist>
       </div>
+      {vocab && selected && codes.includes(selected) && (
+        <CodeModifiers
+          code={selected}
+          vocab={vocab}
+          onChange={(next) => replaceCode(selected, next)}
+        />
+      )}
       {error && <p className="classify-error">{error}</p>}
     </div>
   );

@@ -15,13 +15,30 @@ interface CodePillProps {
   code: string;
   vocab: Vocabulary | undefined;
   onRemove?: () => void;
+  /** Makes the code clickable, e.g. to edit its prefix and level. */
+  onSelect?: () => void;
+  selected?: boolean;
 }
 
 /** A forum genre code. Hover shows its Chinese label. */
-export function CodePill({ code, vocab, onRemove }: CodePillProps) {
+export function CodePill({ code, vocab, onRemove, onSelect, selected }: CodePillProps) {
   return (
-    <span className="code-pill" title={codeTitle(vocab, code)}>
-      {code}
+    <span
+      className={`code-pill ${selected ? "code-pill-selected" : ""}`}
+      title={codeTitle(vocab, code)}
+    >
+      {onSelect ? (
+        <button
+          type="button"
+          className="code-pill-select"
+          onClick={onSelect}
+          aria-pressed={selected}
+        >
+          {code}
+        </button>
+      ) : (
+        code
+      )}
       {onRemove && (
         <button
           type="button"
