@@ -407,8 +407,8 @@ Each phase is usable on its own. Phases 1 and 2 never touch NAS files.
 ### Phase 1: vocabulary and tags
 
 1. Migration 0008 with seed data and backfill.
-2. `grimoire-app::vocabulary`: code normalisation, aliases, prefixes,
-   superscripts, families. Unit tested.
+2. `domain::vocabulary` and `domain::genre_code`: code normalisation, aliases,
+   prefixes, superscripts, families. Unit tested.
 3. `apply_detail` upserts `work_source_data` for the applied source.
 4. `GET /api/vocabulary` and the code add, edit and delete endpoints.
 5. `POST /api/classification/confirm` with validation, normalisation and the
@@ -423,8 +423,8 @@ Each phase is usable on its own. Phases 1 and 2 never touch NAS files.
 ### Phase 2: suggestions and batch confirm
 
 1. Migration 0009 with seed rules.
-2. `grimoire-app::classification`: the suggestion algorithm as a pure
-   function. Unit tested.
+2. `domain::category_suggestion`: the suggestion algorithm as a pure
+   derivation. Unit tested.
 3. Suggestions, rules and common tags endpoints.
 4. UI: Classify view with batch confirm, the Organize "Needs category" filter,
    the suggestion box in the item panel, and the rules editor and common tags
@@ -433,10 +433,11 @@ Each phase is usable on its own. Phases 1 and 2 never touch NAS files.
 ### Phase 3: moves
 
 1. Migration 0010.
-2. `grimoire-app::organization`: target path planning with the no-auto-flatten
-   rule and segment sanitising. Unit tested.
-3. `grimoire-app::library_writer`: no-overwrite move and pruning. Tested on
-   temporary directories.
+2. `domain::file_placement` and `domain::move_plan`: target path planning with
+   the no-auto-flatten rule, segment sanitising and conflicts. Unit tested.
+3. `infrastructure::storage` (`FsLibraryFiles`, `FsLibraryFolders`):
+   no-overwrite move and pruning. Tested on temporary directories. The move log,
+   undo and reconciliation rules live in `domain::move_batch`.
 4. Plan, preview, execute, batches and undo endpoints, with the shared library
    lock also taken by scan.
 5. UI: Move view with per-category selection, preview, execute, and batch

@@ -212,8 +212,8 @@ async function ensureOk(r: Response, what: string): Promise<Response> {
   if (r.ok) return r;
   let message = `${what} failed: ${r.status}`;
   try {
-    const body: { error?: string } = await r.json();
-    if (body.error) message = body.error;
+    const body: { code?: string; message?: string } = await r.json();
+    if (body.message) message = body.message;
   } catch {
     // not JSON; keep the status message
   }

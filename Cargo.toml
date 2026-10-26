@@ -1,32 +1,40 @@
-[workspace]
-resolver = "2"
-members = [
-  "crates/grimoire-domain",
-  "crates/grimoire-app",
-  "crates/grimoire-server"
-]
-
-[workspace.package]
-edition = "2021"
-license = "MIT"
+[package]
+name = "grimoire"
 version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
 
-[workspace.dependencies]
+[[bin]]
+name = "grimoire-server"
+path = "src/main.rs"
+
+[dependencies]
 anyhow = "1"
 async-trait = "0.1"
-axum = "0.8"
-regex = "1"
-reqwest = { version = "0.12", features = ["json", "cookies"] }
-urlencoding = "2"
+axum = { version = "0.8", features = ["macros", "multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
+regex = "1"
+reqwest = { version = "0.12", features = ["json", "cookies"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["serde", "v4"] }
+urlencoding = "2"
+uuid = { version = "1", features = ["serde", "v7"] }
 walkdir = "2"
+
+[dev-dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "2", features = ["full", "visit"] }
+tower = { version = "0.5", features = ["util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+unreachable_pub = "warn"

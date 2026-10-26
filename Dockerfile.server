@@ -8,14 +8,13 @@ WORKDIR /build
 # extra apt package the build expects is none — `rust:1-bookworm` already
 # ships gcc + libc headers.
 
-# Copy the workspace manifest set first so a code-only edit lets cargo
-# reuse the cached dep build.
 COPY Cargo.toml Cargo.lock ./
-COPY crates ./crates
+COPY src ./src
+COPY migrations ./migrations
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
-    cargo build --release -p grimoire-server \
+    cargo build --release --bin grimoire-server \
  && cp target/release/grimoire-server /usr/local/bin/grimoire-server
 
 # --- runtime -------------------------------------------------------------
